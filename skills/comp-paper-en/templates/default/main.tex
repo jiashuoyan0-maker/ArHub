@@ -1,0 +1,45 @@
+\documentclass{mcmthesis}
+\mcmsetup{
+    CTeX = false,
+    tcn = 0000000,        % Team Control Number
+    problem = A,           % Problem choice
+    sheet = true,          % Summary sheet
+    titleinsheet = true,
+    keywordsinsheet = true,
+    titlepage = false,
+}
+\usepackage{amsmath,amssymb}
+\usepackage{graphicx}
+\usepackage{booktabs}
+\usepackage{float}
+\usepackage[hidelinks]{hyperref}
+\usepackage{tikz}
+\usetikzlibrary{arrows.meta,positioning,shapes.geometric}
+\usepackage{listings}
+
+\title{[Paper Title]}
+
+\begin{document}
+\begin{abstract}
+[Summary content — THIS IS THE MOST IMPORTANT PART]
+\keywords{keyword1; keyword2; keyword3}
+\end{abstract}
+\maketitle
+\tableofcontents
+\newpage
+
+\input{sections/1_introduction}
+\input{sections/2_assumptions}
+\input{sections/3_notations}
+\input{sections/4_model}
+\input{sections/5_sensitivity}
+\input{sections/6_evaluation}
+\input{sections/7_conclusions}
+
+\bibliography{references}
+\bibliographystyle{plain}
+
+\appendix
+\input{sections/A_code}
+
+\end{document}

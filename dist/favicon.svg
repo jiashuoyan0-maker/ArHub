@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 1024 1024">
+  <defs>
+    <clipPath id="s"><rect x="48" y="48" width="928" height="928" rx="218"/></clipPath>
+    <linearGradient id="b" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#48C6FF"/><stop offset="0.44" stop-color="#6C63F5"/><stop offset="1" stop-color="#FF5FA2"/></linearGradient>
+    <radialGradient id="c" cx="0" cy="0" r="1" gradientTransform="translate(235 228) rotate(39) scale(560)"><stop offset="0" stop-color="#B7F5FF" stop-opacity="0.88"/><stop offset="1" stop-color="#5BDBFF" stop-opacity="0"/></radialGradient>
+    <radialGradient id="p" cx="0" cy="0" r="1" gradientTransform="translate(820 790) rotate(-132) scale(620)"><stop offset="0" stop-color="#FF9A9E" stop-opacity="0.94"/><stop offset="1" stop-color="#FF6EAD" stop-opacity="0"/></radialGradient>
+  </defs>
+  <g clip-path="url(#s)"><rect x="48" y="48" width="928" height="928" fill="url(#b)"/><rect x="48" y="48" width="928" height="928" fill="url(#c)"/><rect x="48" y="48" width="928" height="928" fill="url(#p)"/>
+    <g fill="#FFF" stroke="#FFF" stroke-linecap="round"><path d="M512 508 L512 329 M486 532 L348 673 M538 532 L676 673" fill="none" stroke-width="64"/><circle cx="512" cy="303" r="76" stroke="none"/><circle cx="320" cy="704" r="76" stroke="none"/><circle cx="704" cy="704" r="76" stroke="none"/><circle cx="512" cy="532" r="92" stroke="none"/></g>
+  </g>
+</svg>

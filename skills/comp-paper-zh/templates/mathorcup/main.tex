@@ -1,0 +1,66 @@
+% !TeX program = xelatex
+% !TeX encoding = UTF-8
+\documentclass{MathorCupmodeling}
+
+% === 额外宏包 ===
+\usepackage{algorithm2e}
+\usepackage{float}
+\usepackage[section]{placeins}
+\usepackage{needspace}
+
+% === TikZ ===
+\usepackage{tikz}
+\usetikzlibrary{arrows.meta,positioning,shapes.geometric,fit,calc}
+\usepackage{longtable}
+
+% === 竞赛信息 ===
+\bianhao{[队伍编号]}
+\tihao{[题号]}
+\timu{[论文标题]}
+\keyword{[关键词1]；[关键词2]；[关键词3]}
+
+% === 引用上标格式 ===
+\makeatletter
+\def\@cite#1#2{\textsuperscript{[{#1\if@tempswa , #2\fi}]}}
+\makeatother
+
+\begin{document}
+
+% === 摘要 ===
+\begin{abstract}
+
+[中文摘要内容：问题概述 + 每个子问题的方法和数值结果 + 结论，400-600字]
+
+\end{abstract}
+
+% === 目录 ===
+\newpage
+\tableofcontents
+\newpage
+
+% === 正文 ===
+\input{sections/1_restatement}
+\input{sections/2_analysis}
+\input{sections/3_assumptions}
+\input{sections/4_symbols}
+\input{sections/5_problem1}
+\input{sections/6_problem2}
+\input{sections/7_problem3}
+\input{sections/8_evaluation}
+
+% === 参考文献 ===
+\phantomsection
+\addcontentsline{toc}{section}{参考文献}
+\begin{thebibliography}{99}
+% \bibitem{ref1} 作者. 标题[J]. 期刊, 年份.
+\end{thebibliography}
+
+% === 附录 ===
+\appendix
+\ctexset{section={format={\zihao{-4}\heiti\raggedright}}}
+\begin{center}
+  \heiti\zihao{4} 附\hspace{1pc}录
+\end{center}
+\input{sections/A_code}
+
+\end{document}

@@ -1,0 +1,75 @@
+{
+  "schema_version": "1.0",
+  "id": "arhub.core",
+  "name": "ArHub Core Profiles",
+  "version": "1.0.0",
+  "description": "Open Agent profiles and command contributions for the dynamic workspace.",
+  "license": "MIT",
+  "contributes": {
+    "agent_profiles": [
+      {
+        "id": "general",
+        "label": "通用执行",
+        "description": "跨文件分析、修改与验证",
+        "mode": "agent",
+        "accent": "#0a84ff",
+        "capabilities": ["read", "write", "run", "review"],
+        "system_prompt": "你是通用执行 Agent。先理解目标和当前工作区，再选择最少但充分的文件与工具完成任务。修改后必须验证，并清楚报告未完成项。"
+      },
+      {
+        "id": "code",
+        "label": "代码工程",
+        "description": "面向代码实现、调试和测试",
+        "mode": "agent",
+        "accent": "#30d158",
+        "capabilities": ["read", "write", "run", "test", "debug"],
+        "system_prompt": "你是代码工程 Agent。遵循现有代码风格，先定位真实根因，再做范围最小的实现。必须运行与改动风险相称的测试，不得用未经验证的猜测替代检查。"
+      },
+      {
+        "id": "research",
+        "label": "研究写作",
+        "description": "面向论文、报告与证据组织",
+        "mode": "agent",
+        "accent": "#bf5af2",
+        "capabilities": ["read", "write", "analyze", "cite"],
+        "system_prompt": "你是研究写作 Agent。围绕论点、证据和结构工作，区分已知事实与推断，保留可追溯来源，并优先提高内容准确性、连贯性和可验证性。"
+      },
+      {
+        "id": "reviewer",
+        "label": "审查改进",
+        "description": "发现风险、缺口和回归",
+        "mode": "agent",
+        "accent": "#ff9f0a",
+        "capabilities": ["read", "review", "compare", "test"],
+        "system_prompt": "你是审查 Agent。先寻找错误、行为回归、安全风险和缺失验证，按严重程度给出具体证据；只有在问题清楚后才提出修复方案。"
+      }
+    ],
+    "commands": [
+      {
+        "id": "inspect-context",
+        "label": "检查当前上下文",
+        "description": "先理解文件与任务状态",
+        "prompt": "检查当前文件和相关上下文，先列出你确认的事实、信息缺口和下一步，再开始修改。"
+      },
+      {
+        "id": "plan-change",
+        "label": "规划本次修改",
+        "description": "形成短而可执行的实现方案",
+        "prompt": "针对当前目标形成一份简洁的修改计划，明确会改哪些文件、保留哪些行为以及如何验证，然后按计划执行。"
+      },
+      {
+        "id": "review-changes",
+        "label": "审查当前改动",
+        "description": "检查错误、回归和测试缺口",
+        "prompt": "审查当前工作区的改动，优先找行为错误、回归风险、安全问题和缺失测试；给出具体文件与证据。"
+      },
+      {
+        "id": "summarize-workspace",
+        "label": "总结工作区",
+        "description": "形成当前状态和下一步摘要",
+        "prompt": "总结当前工作区已经完成的内容、仍存在的问题、关键产物和最合理的下一步。"
+      }
+    ],
+    "tool_adapters": []
+  }
+}

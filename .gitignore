@@ -1,0 +1,55 @@
+﻿__pycache__/
+*.pyc
+*.pyo
+node_modules/
+*.log
+.DS_Store
+Thumbs.db
+
+# runtime state / user data
+/workspaces/
+/db/
+*.db
+*.db-*
+*.sqlite
+*.sqlite3
+license.json
+
+# local model credentials — never commit
+proxy_config.yaml
+proxy_config.*.yaml
+!proxy_config.example.yaml
+*_openai.json
+*.key
+.env
+.env.*
+!.env.example
+*.pem
+*.p12
+*.pfx
+*.crt
+*.cer
+*.der
+*.sig
+
+# packaged runtimes and recovered native binaries
+runtime/
+*.exe
+*.dll
+*.pyd
+
+# local recovery and design intermediates
+recovery-output/
+local-recovery-assets/
+.playwright-cli/
+.runtime-*/
+.arhub-data/
+.venv/
+assets/icon.html
+assets/icon-v2*
+assets/icon-v3*
+
+# build output
+dist-ssr/
+out/
+release/

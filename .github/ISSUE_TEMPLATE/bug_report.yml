@@ -1,0 +1,50 @@
+name: Bug report
+description: 报告可复现的 ArHub 行为错误
+title: "[Bug] "
+labels:
+  - bug
+body:
+  - type: markdown
+    attributes:
+      value: 请删除日志、截图和配置中的 API Key、用户文件内容与个人信息。
+  - type: textarea
+    id: summary
+    attributes:
+      label: 问题描述
+      description: 说明实际行为与预期行为。
+    validations:
+      required: true
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: 复现步骤
+      description: 提供最小、稳定的复现步骤。
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: 版本或提交
+    validations:
+      required: true
+  - type: dropdown
+    id: install_kind
+    attributes:
+      label: 运行方式
+      options:
+        - 已安装恢复版
+        - 源码骨架
+        - 其他
+    validations:
+      required: true
+  - type: textarea
+    id: evidence
+    attributes:
+      label: 已脱敏的日志或截图
+  - type: checkboxes
+    id: privacy
+    attributes:
+      label: 隐私确认
+      options:
+        - label: 我已移除 API Key、激活信息、用户文件和个人信息
+          required: true

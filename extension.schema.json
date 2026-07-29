@@ -1,0 +1,84 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://arhub.local/schemas/extension-v1.json",
+  "title": "ArHub Workspace Extension Manifest",
+  "type": "object",
+  "required": ["schema_version", "id", "name", "version", "contributes"],
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": { "const": "1.0" },
+    "id": { "$ref": "#/$defs/id" },
+    "name": { "type": "string", "minLength": 1, "maxLength": 80 },
+    "version": { "type": "string", "minLength": 1, "maxLength": 32 },
+    "description": { "type": "string", "maxLength": 240 },
+    "license": { "type": "string", "maxLength": 48 },
+    "homepage": { "type": "string", "maxLength": 240 },
+    "contributes": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "agent_profiles": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/agent_profile" }
+        },
+        "commands": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/command" }
+        },
+        "tool_adapters": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/tool_adapter" }
+        }
+      }
+    }
+  },
+  "$defs": {
+    "id": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9._-]{1,63}$"
+    },
+    "agent_profile": {
+      "type": "object",
+      "required": ["id", "label", "mode", "system_prompt"],
+      "additionalProperties": false,
+      "properties": {
+        "id": { "$ref": "#/$defs/id" },
+        "label": { "type": "string", "minLength": 1, "maxLength": 48 },
+        "description": { "type": "string", "maxLength": 180 },
+        "mode": { "enum": ["agent", "lite"] },
+        "accent": {
+          "type": "string",
+          "pattern": "^#[0-9a-fA-F]{6}$"
+        },
+        "capabilities": {
+          "type": "array",
+          "maxItems": 12,
+          "items": { "type": "string", "maxLength": 40 }
+        },
+        "system_prompt": { "type": "string", "maxLength": 12000 }
+      }
+    },
+    "command": {
+      "type": "object",
+      "required": ["id", "label", "prompt"],
+      "additionalProperties": false,
+      "properties": {
+        "id": { "$ref": "#/$defs/id" },
+        "label": { "type": "string", "minLength": 1, "maxLength": 64 },
+        "description": { "type": "string", "maxLength": 180 },
+        "prompt": { "type": "string", "minLength": 1, "maxLength": 12000 }
+      }
+    },
+    "tool_adapter": {
+      "type": "object",
+      "required": ["id", "label"],
+      "additionalProperties": false,
+      "properties": {
+        "id": { "$ref": "#/$defs/id" },
+        "label": { "type": "string", "minLength": 1, "maxLength": 64 },
+        "description": { "type": "string", "maxLength": 180 },
+        "protocol": { "type": "string", "maxLength": 32 }
+      }
+    }
+  }
+}

@@ -1,0 +1,55 @@
+\documentclass[bwprint]{apmcmthesis}
+
+% === Extra packages ===
+\usepackage{algorithm2e}
+
+% === TikZ ===
+\usepackage{tikz}
+\usetikzlibrary{arrows.meta,positioning,shapes.geometric,fit,calc}
+
+% === Competition info ===
+\tihao{[A/B/C]}
+\baominghao{[Team Number]}
+\schoolname{[School Name]}
+\membera{[Member A]}
+\memberb{[Member B]}
+\memberc{[Member C]}
+
+\title{[Paper Title]}
+
+\begin{document}
+
+\makecontrolsheet
+\maketitle
+
+\begin{abstract}
+
+[Summary: problem overview + methods for each sub-problem + key numerical results + conclusions, 300-500 words]
+
+\keywords{[Keyword1]; [Keyword2]; [Keyword3]}
+\end{abstract}
+
+\newpage
+\tableofcontents
+\newpage
+
+% === Body ===
+\input{sections/1_introduction}
+\input{sections/2_assumptions}
+\input{sections/3_model_design}
+\input{sections/4_solution}
+\input{sections/5_sensitivity}
+\input{sections/6_strengths_weaknesses}
+\input{sections/7_conclusions}
+
+% === References ===
+\begin{thebibliography}{99}
+% \bibitem{ref1} Author. Title[J]. Journal, Year.
+\end{thebibliography}
+
+% === Appendix ===
+\begin{appendices}
+\input{sections/A_code}
+\end{appendices}
+
+\end{document}
