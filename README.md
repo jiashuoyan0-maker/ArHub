@@ -3,16 +3,63 @@
 [![Quality](https://github.com/jiashuoyan0-maker/ArHub/actions/workflows/quality.yml/badge.svg)](https://github.com/jiashuoyan0-maker/ArHub/actions/workflows/quality.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
-![ArHub icon](assets/icon-preview-64.png)
+<p align="center">
+  <img src="assets/icon-1024.png" width="112" alt="ArHub icon">
+</p>
+
+<p align="center"><strong>把 Agent、文件、编辑器和工作流放回同一个任务现场。</strong></p>
 
 ArHub（AI Research Hub）是一个面向科研写作、数据分析和工程任务的桌面 Agent
 工作台，使用 Electron、FastAPI、OpenAI-compatible 模型接口和可扩展 Skill 工作流。
+
+它不把 Agent 限制在一个孤立聊天框里。日常操作以对话为中心；当任务涉及文件、
+产物或代码时，文件树、编辑器和预览会在当前工作区按需展开。执行过程中的步骤、
+检查点、日志和产物会保留在任务中，方便继续运行、回看和审阅，而不是随着一段
+聊天记录一起沉下去。
+
+![ArHub 文件树、Agent 对话与编辑器工作区](assets/screenshots/04-files-editor-agent.png)
 
 > [!NOTE]
 > 本仓库由已安装应用的构建产物重建。后端、Agent、工作流、编辑器、状态层和
 > 文档导出链路已经重写为可审查源码并可从源码运行；前端保留可运行的
 > `dist/` 产物与恢复后的 `frontend-src/index.js`。原始 Vite 模块图和
 > Windows 打包工程仍未恢复，因此源码发布与安装包发布的成熟度不同。
+
+## 界面预览
+
+### Agent 与文档并排工作
+
+Agent 对话是主工作区。打开文档后，Markdown/LaTeX 编辑器会在侧边展开，当前
+文件会自动进入 Agent 上下文，不需要在聊天窗口、文件管理器和编辑器之间来回切换。
+
+![ArHub Agent 与 Markdown 编辑器](assets/screenshots/03-editor-agent-split.png)
+
+### 从单步任务到完整科研流水线
+
+新建任务时可以选择 Idea 发现、实验桥接、自动审稿循环或完整流水线。模板负责
+定义步骤与角色，参数仍由用户在启动前确认。
+
+![ArHub 科研工作流模板](assets/screenshots/01-workflow-templates.png)
+
+完整流水线可以继续设置输出格式、论文语言、论文类型和后续执行选项。运行状态、
+检查点和产物会按任务持久化，中断后可以从已有状态继续。
+
+![ArHub 完整流水线参数](assets/screenshots/02-full-pipeline-config.png)
+
+### 每个 Agent 独立选择模型
+
+执行者、审稿者和编辑器助手可以分别配置 Base URL、API Key 与 Model ID，适合用
+不同模型承担执行、批判和写作任务。下图使用全新的空白演示配置，不包含凭证。
+
+![ArHub 多 Agent 模型设置](assets/screenshots/05-model-settings-light.png)
+
+## 典型工作方式
+
+1. 新建任务并选择工作流模板，或者从一个轻量 Agent 对话开始。
+2. 为执行者、审稿者和编辑器助手选择各自的 OpenAI-compatible 模型。
+3. Agent 调用 Skill 执行检索、分析、代码、绘图或文档生成，并把结果写入任务工作区。
+4. 在当前对话旁打开产物，检查文件差异，再决定应用、丢弃或撤销修改。
+5. 在检查点暂停、恢复或重跑单个步骤，而不必从头复制整段提示词。
 
 ## 当前状态
 
