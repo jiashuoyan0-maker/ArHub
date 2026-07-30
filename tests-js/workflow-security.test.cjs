@@ -55,3 +55,22 @@ test('Windows CI uses portable Node test discovery and avoids duplicate branch r
   assert.match(quality, /push:\s*\r?\n\s+branches:\s*\[main\]/);
   assert.match(quality, /pull_request:/);
 });
+
+test('maintenance runs under PowerShell 7 and uses exact-title issue synchronization', () => {
+  const maintenance = fs.readFileSync(path.join(workflowDir, 'maintenance.yml'), 'utf8');
+  const issueSync = fs.readFileSync(
+    path.join(__dirname, '..', 'scripts', 'sync-maintenance-issue.ps1'),
+    'utf8',
+  );
+  const shellLines = maintenance
+    .split('\n')
+    .map((line) => line.trim())
+    .filter((line) => line.startsWith('shell:'));
+
+  assert.ok(shellLines.includes('shell: pwsh'));
+  assert.ok(!shellLines.includes('shell: powershell'));
+  assert.match(maintenance, /sync-maintenance-issue\.ps1/);
+  assert.doesNotMatch(maintenance, /gh issue list --state open --search/);
+  assert.ok(issueSync.includes('Where-Object { $_.title -ceq $Title }'));
+  assert.match(issueSync, /Superseded by/);
+});

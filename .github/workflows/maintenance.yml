@@ -38,7 +38,7 @@ jobs:
       - name: Run security and regression checks
         id: security
         continue-on-error: true
-        shell: powershell
+        shell: pwsh
         run: |
           $failed = $false
           npm audit --omit=dev --registry=https://registry.npmjs.org 2>&1 | Tee-Object -FilePath maintenance-security-report.txt
@@ -60,39 +60,37 @@ jobs:
       - name: Check locked runtime versions
         id: runtime
         continue-on-error: true
-        shell: powershell
+        shell: pwsh
         run: |
           powershell -NoProfile -ExecutionPolicy Bypass -File scripts/check-runtime-updates.ps1 2>&1 | Tee-Object -FilePath runtime-check-log.txt
           if ($LASTEXITCODE -ne 0) { throw 'Runtime version check failed.' }
 
       - name: Create or update runtime maintenance issue
         if: steps.runtime.outcome == 'success' && steps.runtime.outputs.updates == 'true'
-        shell: powershell
+        shell: pwsh
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          $title = 'Runtime dependency updates are available'
-          gh label create dependencies --color 0366d6 --description 'Dependency and runtime maintenance' --force
-          $number = gh issue list --state open --search "`"$title`" in:title" --json number --jq '.[0].number'
-          if ($number) {
-            gh issue comment $number --body-file runtime-update-report.md
-          } else {
-            gh issue create --title $title --label dependencies --body-file runtime-update-report.md
-          }
+          ./scripts/sync-maintenance-issue.ps1 -Action Open `
+            -Title 'Runtime dependency updates are available' `
+            -BodyFile runtime-update-report.md `
+            -Label dependencies `
+            -LabelColor 0366d6 `
+            -LabelDescription 'Dependency and runtime maintenance'
 
       - name: Close resolved runtime maintenance issue
         if: steps.runtime.outcome == 'success' && steps.runtime.outputs.updates != 'true'
-        shell: powershell
+        shell: pwsh
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          $title = 'Runtime dependency updates are available'
-          $number = gh issue list --state open --search "`"$title`" in:title" --json number --jq '.[0].number'
-          if ($number) { gh issue close $number --comment 'The weekly runtime check no longer finds pending updates.' }
+          ./scripts/sync-maintenance-issue.ps1 -Action Close `
+            -Title 'Runtime dependency updates are available' `
+            -ResolvedComment 'The weekly runtime check no longer finds pending updates.'
 
       - name: Prepare failed-maintenance report
         if: always() && (steps.security.outcome == 'failure' || steps.runtime.outcome == 'failure')
-        shell: powershell
+        shell: pwsh
         run: |
           $content = "# Scheduled maintenance failure`n`n"
           foreach ($report in @('maintenance-security-report.txt', 'runtime-check-log.txt')) {
@@ -107,28 +105,26 @@ jobs:
 
       - name: Create or update failed-maintenance issue
         if: always() && (steps.security.outcome == 'failure' || steps.runtime.outcome == 'failure')
-        shell: powershell
+        shell: pwsh
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          $title = 'Scheduled maintenance checks are failing'
-          gh label create maintenance --color d73a4a --description 'Automated maintenance needs attention' --force
-          $number = gh issue list --state open --search "`"$title`" in:title" --json number --jq '.[0].number'
-          if ($number) {
-            gh issue comment $number --body-file maintenance-failure-report.md
-          } else {
-            gh issue create --title $title --label maintenance --body-file maintenance-failure-report.md
-          }
+          ./scripts/sync-maintenance-issue.ps1 -Action Open `
+            -Title 'Scheduled maintenance checks are failing' `
+            -BodyFile maintenance-failure-report.md `
+            -Label maintenance `
+            -LabelColor d73a4a `
+            -LabelDescription 'Automated maintenance needs attention'
 
       - name: Close resolved failed-maintenance issue
         if: steps.security.outcome == 'success' && steps.runtime.outcome == 'success'
-        shell: powershell
+        shell: pwsh
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          $title = 'Scheduled maintenance checks are failing'
-          $number = gh issue list --state open --search "`"$title`" in:title" --json number --jq '.[0].number'
-          if ($number) { gh issue close $number --comment 'All scheduled security and regression checks pass again.' }
+          ./scripts/sync-maintenance-issue.ps1 -Action Close `
+            -Title 'Scheduled maintenance checks are failing' `
+            -ResolvedComment 'All scheduled security and regression checks pass again.'
 
       - name: Fail when maintenance checks failed
         if: steps.security.outcome == 'failure' || steps.runtime.outcome == 'failure'
