@@ -6,20 +6,26 @@ updates:
       interval: weekly
     open-pull-requests-limit: 10
     groups:
-      electron-toolchain:
+      npm-dependencies:
         patterns:
-          - electron
-          - electron-builder
-          - electron-updater
+          - '*'
 
   - package-ecosystem: github-actions
     directory: /
     schedule:
       interval: weekly
-    open-pull-requests-limit: 10
+    open-pull-requests-limit: 3
+    groups:
+      github-actions:
+        patterns:
+          - '*'
 
   - package-ecosystem: pip
     directory: /backend
     schedule:
       interval: weekly
-    open-pull-requests-limit: 10
+    open-pull-requests-limit: 3
+    groups:
+      python-dependencies:
+        patterns:
+          - '*'

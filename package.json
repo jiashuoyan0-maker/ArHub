@@ -29,7 +29,7 @@
     "start": "electron .",
     "check:js": "node --check main.js && node --check preload.js && node --check updater.js && node --check dist/assets/arhub-workspace.js && node --check dist/assets/arhub-codex-shell.js",
     "check:python": "python -B -X utf8 scripts/check-python-syntax.py",
-    "test:node": "node --test tests-js/*.test.cjs",
+    "test:node": "node scripts/run-node-tests.cjs",
     "test:signing": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/test-signing-trust.ps1",
     "test:python": "python -B -X utf8 -m unittest discover -s tests -v",
     "test": "npm run test:node && npm run test:python && npm run test:signing",

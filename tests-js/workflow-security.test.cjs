@@ -44,3 +44,14 @@ test('release upload and checksum asset allowlists stay aligned', () => {
   }
   assert.doesNotMatch(checksumScript, /builder-debug\.yml/);
 });
+
+test('Windows CI uses portable Node test discovery and avoids duplicate branch runs', () => {
+  const quality = fs.readFileSync(path.join(workflowDir, 'quality.yml'), 'utf8');
+  const packageMetadata = JSON.parse(
+    fs.readFileSync(path.join(__dirname, '..', 'package.json'), 'utf8'),
+  );
+  assert.equal(packageMetadata.scripts['test:node'], 'node scripts/run-node-tests.cjs');
+  assert.doesNotMatch(packageMetadata.scripts['test:node'], /[*?]/);
+  assert.match(quality, /push:\s*\r?\n\s+branches:\s*\[main\]/);
+  assert.match(quality, /pull_request:/);
+});
