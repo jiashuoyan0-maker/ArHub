@@ -51,7 +51,7 @@
   "dependencies": {
     "docx": "9.6.1",
     "electron-updater": "6.8.9",
-    "fast-xml-parser": "5.7.3",
+    "fast-xml-parser": "5.10.1",
     "temml": "0.13.2"
   },
   "devDependencies": {
