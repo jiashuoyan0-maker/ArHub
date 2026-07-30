@@ -1,11 +1,13 @@
 [CmdletBinding()]
 param(
-    [string]$ManifestPath
+    [string]$ManifestPath,
+    [string]$ReportPath
 )
 
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
 if (-not $ManifestPath) { $ManifestPath = Join-Path $PSScriptRoot '..\packaging\runtime-manifest.json' }
+if (-not $ReportPath) { $ReportPath = Join-Path (Get-Location) 'runtime-update-report.md' }
 $manifest = Get-Content -LiteralPath $ManifestPath -Encoding UTF8 | ConvertFrom-Json
 $headers = @{ 'User-Agent' = 'ArHub-runtime-maintenance' }
 
@@ -83,7 +85,9 @@ foreach ($check in $checks) {
 $lines.Add('')
 $lines.Add('MiKTeX is a rolling distribution and remains a manual review item.')
 $utf8 = New-Object System.Text.UTF8Encoding($false)
-[System.IO.File]::WriteAllLines((Join-Path (Get-Location) 'runtime-update-report.md'), $lines, $utf8)
+$reportDirectory = Split-Path -Parent $ReportPath
+if ($reportDirectory) { [System.IO.Directory]::CreateDirectory($reportDirectory) | Out-Null }
+[System.IO.File]::WriteAllLines($ReportPath, $lines, $utf8)
 
 $hasUpdates = if ($updates.Count -gt 0) { 'true' } else { 'false' }
 if ($env:GITHUB_OUTPUT) { "updates=$hasUpdates" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append }

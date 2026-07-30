@@ -40,20 +40,23 @@ jobs:
         continue-on-error: true
         shell: pwsh
         run: |
+          $reportDir = Join-Path $env:RUNNER_TEMP 'arhub-maintenance'
+          New-Item -ItemType Directory -Path $reportDir -Force | Out-Null
+          $securityReport = Join-Path $reportDir 'maintenance-security-report.txt'
           $failed = $false
-          npm audit --omit=dev --registry=https://registry.npmjs.org 2>&1 | Tee-Object -FilePath maintenance-security-report.txt
+          npm audit --omit=dev --registry=https://registry.npmjs.org 2>&1 | Tee-Object -FilePath $securityReport
           if ($LASTEXITCODE -ne 0) { $failed = $true }
-          python -m pip_audit -r backend/requirements.txt 2>&1 | Tee-Object -FilePath maintenance-security-report.txt -Append
+          python -m pip_audit -r backend/requirements.txt 2>&1 | Tee-Object -FilePath $securityReport -Append
           if ($LASTEXITCODE -ne 0) { $failed = $true }
-          python -m pip_audit -r packaging/python-requirements.lock.txt --no-deps --disable-pip 2>&1 | Tee-Object -FilePath maintenance-security-report.txt -Append
+          python -m pip_audit -r packaging/python-requirements.lock.txt --no-deps --disable-pip 2>&1 | Tee-Object -FilePath $securityReport -Append
           if ($LASTEXITCODE -ne 0) { $failed = $true }
-          npm run check:js 2>&1 | Tee-Object -FilePath maintenance-security-report.txt -Append
+          npm run check:js 2>&1 | Tee-Object -FilePath $securityReport -Append
           if ($LASTEXITCODE -ne 0) { $failed = $true }
-          npm run check:python 2>&1 | Tee-Object -FilePath maintenance-security-report.txt -Append
+          npm run check:python 2>&1 | Tee-Object -FilePath $securityReport -Append
           if ($LASTEXITCODE -ne 0) { $failed = $true }
-          npm test 2>&1 | Tee-Object -FilePath maintenance-security-report.txt -Append
+          npm test 2>&1 | Tee-Object -FilePath $securityReport -Append
           if ($LASTEXITCODE -ne 0) { $failed = $true }
-          npm run audit:open-source 2>&1 | Tee-Object -FilePath maintenance-security-report.txt -Append
+          npm run audit:open-source 2>&1 | Tee-Object -FilePath $securityReport -Append
           if ($LASTEXITCODE -ne 0) { $failed = $true }
           if ($failed) { throw 'One or more maintenance checks failed.' }
 
@@ -62,7 +65,11 @@ jobs:
         continue-on-error: true
         shell: pwsh
         run: |
-          powershell -NoProfile -ExecutionPolicy Bypass -File scripts/check-runtime-updates.ps1 2>&1 | Tee-Object -FilePath runtime-check-log.txt
+          $reportDir = Join-Path $env:RUNNER_TEMP 'arhub-maintenance'
+          New-Item -ItemType Directory -Path $reportDir -Force | Out-Null
+          $runtimeLog = Join-Path $reportDir 'runtime-check-log.txt'
+          $runtimeReport = Join-Path $reportDir 'runtime-update-report.md'
+          powershell -NoProfile -ExecutionPolicy Bypass -File scripts/check-runtime-updates.ps1 -ReportPath $runtimeReport 2>&1 | Tee-Object -FilePath $runtimeLog
           if ($LASTEXITCODE -ne 0) { throw 'Runtime version check failed.' }
 
       - name: Create or update runtime maintenance issue
@@ -71,9 +78,10 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
+          $runtimeReport = Join-Path $env:RUNNER_TEMP 'arhub-maintenance\runtime-update-report.md'
           ./scripts/sync-maintenance-issue.ps1 -Action Open `
             -Title 'Runtime dependency updates are available' `
-            -BodyFile runtime-update-report.md `
+            -BodyFile $runtimeReport `
             -Label dependencies `
             -LabelColor 0366d6 `
             -LabelDescription 'Dependency and runtime maintenance'
@@ -93,15 +101,17 @@ jobs:
         shell: pwsh
         run: |
           $content = "# Scheduled maintenance failure`n`n"
-          foreach ($report in @('maintenance-security-report.txt', 'runtime-check-log.txt')) {
+          $reportDir = Join-Path $env:RUNNER_TEMP 'arhub-maintenance'
+          foreach ($name in @('maintenance-security-report.txt', 'runtime-check-log.txt')) {
+            $report = Join-Path $reportDir $name
             if (Test-Path -LiteralPath $report) {
-              $content += "## $report`n`n"
+              $content += "## $name`n`n"
               $content += [System.IO.File]::ReadAllText((Resolve-Path -LiteralPath $report))
               $content += "`n`n"
             }
           }
           if ($content.Length -gt 60000) { $content = $content.Substring(0, 60000) + "`n`n[report truncated]" }
-          [System.IO.File]::WriteAllText((Join-Path (Get-Location) 'maintenance-failure-report.md'), $content, (New-Object System.Text.UTF8Encoding($false)))
+          [System.IO.File]::WriteAllText((Join-Path $reportDir 'maintenance-failure-report.md'), $content, (New-Object System.Text.UTF8Encoding($false)))
 
       - name: Create or update failed-maintenance issue
         if: always() && (steps.security.outcome == 'failure' || steps.runtime.outcome == 'failure')
@@ -109,9 +119,10 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
+          $failureReport = Join-Path $env:RUNNER_TEMP 'arhub-maintenance\maintenance-failure-report.md'
           ./scripts/sync-maintenance-issue.ps1 -Action Open `
             -Title 'Scheduled maintenance checks are failing' `
-            -BodyFile maintenance-failure-report.md `
+            -BodyFile $failureReport `
             -Label maintenance `
             -LabelColor d73a4a `
             -LabelDescription 'Automated maintenance needs attention'

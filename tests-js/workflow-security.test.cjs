@@ -69,6 +69,10 @@ test('maintenance runs under PowerShell 7 and uses exact-title issue synchroniza
 
   assert.ok(shellLines.includes('shell: pwsh'));
   assert.ok(!shellLines.includes('shell: powershell'));
+  assert.ok(maintenance.includes("Join-Path $env:RUNNER_TEMP 'arhub-maintenance'"));
+  assert.ok(maintenance.includes('-ReportPath $runtimeReport'));
+  assert.ok(!maintenance.includes('-FilePath maintenance-security-report.txt'));
+  assert.ok(!maintenance.includes('-FilePath runtime-check-log.txt'));
   assert.match(maintenance, /sync-maintenance-issue\.ps1/);
   assert.doesNotMatch(maintenance, /gh issue list --state open --search/);
   assert.ok(issueSync.includes('Where-Object { $_.title -ceq $Title }'));
