@@ -19,6 +19,7 @@ jobs:
     env:
       GH_TOKEN: ${{ github.token }}
       ARHUB_RUNTIME_DIR: ${{ vars.ARHUB_RUNTIME_DIR }}
+      ARHUB_RUNTIME_BUNDLE_CACHE: ${{ vars.ARHUB_RUNTIME_BUNDLE_CACHE }}
 
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
@@ -36,7 +37,15 @@ jobs:
         run: |
           if (-not $env:ARHUB_RUNTIME_DIR) { throw 'Repository variable ARHUB_RUNTIME_DIR is required on the runtime builder.' }
           New-Item -ItemType Directory -Path runtime-output -Force | Out-Null
-          powershell -NoProfile -ExecutionPolicy Bypass -File scripts/package-runtime.ps1 -RuntimeDir $env:ARHUB_RUNTIME_DIR -OutputDir runtime-output
+          $arguments = @(
+            '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', 'scripts/package-runtime.ps1',
+            '-RuntimeDir', $env:ARHUB_RUNTIME_DIR, '-OutputDir', 'runtime-output'
+          )
+          if ($env:ARHUB_RUNTIME_BUNDLE_CACHE) {
+            $arguments += @('-ArchiveSeedDir', $env:ARHUB_RUNTIME_BUNDLE_CACHE, '-ReuseExistingArchives')
+          }
+          powershell @arguments
+          if ($LASTEXITCODE -ne 0) { throw 'Runtime bundle packaging failed.' }
 
       - name: Verify committed bundle manifest
         shell: powershell
@@ -61,7 +70,7 @@ jobs:
             $release = $existing | ConvertFrom-Json
             if (-not $release.isDraft) { throw "Runtime release $tag is already published and immutable." }
           } else {
-            gh release create $tag --repo "${{ github.repository }}" --target "${{ github.sha }}" --title "ArHub Runtime $($manifest.runtimeVersion)" --notes "Locked Windows x64 runtime used by signed ArHub releases. This prerelease is an internal build input, not an application update." --draft --prerelease --latest=false
+            gh release create $tag --repo "${{ github.repository }}" --target "${{ github.sha }}" --title "ArHub Runtime $($manifest.runtimeVersion)" --notes "Locked Windows x64 runtime used by ArHub releases. This prerelease is an internal build input, not an application update." --draft --prerelease --latest=false
           }
           $assets = @(Get-ChildItem runtime-output -File | Select-Object -ExpandProperty FullName)
           gh release upload $tag @assets --repo "${{ github.repository }}" --clobber

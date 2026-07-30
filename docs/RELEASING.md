@@ -1,23 +1,20 @@
 # Releasing ArHub for Windows
 
-ArHub publishes a per-user, one-click NSIS installer. The desktop executable,
-uninstaller and installer must carry a valid, timestamped Authenticode signature.
-The release workflow refuses to publish an unsigned artifact.
+ArHub publishes a per-user, one-click NSIS installer. The official open-source
+release is currently unsigned because the project does not maintain a commercial
+code-signing identity. The workflow requires every ArHub-owned release target to
+report `NotSigned`; it will not treat a self-signed artifact as trusted.
 
-The signing allowlist contains `ArHub.exe`, the packaged updater elevation
-helper, and the generated NSIS installer/uninstaller. All other executables are
-excluded. After packaging, the complete runtime is checked against the committed
-byte counts and probe hashes so a release cannot replace Python, Node.js, Git,
-Pandoc, Draw.io or MiKTeX vendor signatures.
+After packaging, the complete runtime is checked against the committed byte
+counts and probe hashes so a release cannot replace Python, Node.js, Git, Pandoc,
+Draw.io or MiKTeX vendor signatures. Release assets also include SHA-256 checksums,
+SHA-512 updater metadata, CycloneDX SBOMs and GitHub build provenance.
 
-## Required repository configuration
+## Optional future signing
 
-Choose one signing provider.
-
-The release job targets the `windows-release` GitHub Environment. Store signing
-secrets in that environment where possible so they are exposed only to the
-release job; repository-level secrets with the same names also work. Never put a
-certificate, password or Azure credential in a repository variable or file.
+Signing support remains available for a future maintainer, but it is not required
+by the current official workflow. Never put a certificate, password or Azure
+credential in a repository variable or file.
 
 ### PFX certificate
 
@@ -59,6 +56,12 @@ archives, attests them, and publishes the locked `runtime-v<version>` prerelease
 used by the Windows release job. Runtime releases are never marked latest, so
 they cannot be mistaken for an application update.
 
+For an already reviewed runtime lock, `ARHUB_RUNTIME_BUNDLE_CACHE` may point to a
+project-owned archive cache on the runner. Every cached archive is checked against
+the committed byte count and SHA-256 before reuse; a missing or mismatched file
+fails the job. New locks should be generated with the timestamp-independent 7-Zip
+settings in `scripts/package-runtime.ps1`.
+
 To regenerate locks after an intentional runtime change:
 
 ```powershell
@@ -77,31 +80,28 @@ runtime in the installed per-user ArHub directory.
 1. Run `npm ci`, `npm test`, and `npm run audit:open-source`.
 2. Update `package.json` to the release version and commit all lock changes.
 3. Create and push the matching tag, for example `v1.0.9`.
-4. The **Signed Windows Release** workflow downloads the locked runtime, checks
+4. The **Windows Release** workflow downloads the locked runtime, checks
    every archive against the committed hashes, builds
-   the installer, verifies signatures and timestamps, emits CycloneDX SBOMs and
+   the unsigned installer, requires all ArHub-owned executables to be `NotSigned`, emits CycloneDX SBOMs and
    SHA-256 checksums, installs and launches the application in smoke-test mode,
-   verifies the installed uninstaller signature, uninstalls it, creates
+   verifies the installed uninstaller state, uninstalls it, creates
    build-provenance attestations, and publishes the GitHub Release.
 
-Local signed builds use the same gate:
+The official local build uses the same unsigned-release gate:
 
 ```powershell
-$env:ARHUB_PUBLISHER_NAME = 'Exact certificate common name'
-$env:CSC_LINK = 'C:\secure\arhub-code-signing.pfx'
-$env:CSC_KEY_PASSWORD = '<password>'
 npm run package:win
 ```
 
-`npm run package:win:unsigned` exists only for local installer validation. Its
-artifact name contains `-unsigned`, its updater is disabled because no publisher
-is present in `app-update.yml`, and it must never be attached to a public Release.
+`npm run package:win:unsigned` remains a local-candidate command. Its artifact
+name contains `-unsigned`; public Releases use `npm run package:win` and the
+normal `ArHub-Setup-<version>-x64.exe` name.
 
 Run the same installation gate locally with:
 
 ```powershell
 powershell -NoProfile -ExecutionPolicy Bypass -File scripts\smoke-test-installer.ps1 `
-  -InstallerPath release\ArHub-Setup-1.0.9-x64-unsigned.exe -AllowUnsigned
+  -InstallerPath release\ArHub-Setup-1.0.9-x64.exe -RequireUnsigned
 ```
 
 ## Automated maintenance

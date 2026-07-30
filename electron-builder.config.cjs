@@ -26,11 +26,11 @@ const win = {
   artifactName: `ArHub-Setup-\${version}-\${arch}${artifactSuffix}.\${ext}`,
   requestedExecutionLevel: 'asInvoker',
   signAndEditExecutable: true,
-  signExecutable: true,
+  signExecutable: requireSigning,
   // Sign only ArHub's executable, updater elevation helper and generated NSIS
   // artifacts. The final negative suffix preserves all bundled vendor binaries.
   signExts: signingSuffixes,
-  verifyUpdateCodeSignature: true,
+  verifyUpdateCodeSignature: requireSigning,
 };
 
 if (publisherName) {

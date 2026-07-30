@@ -2,5 +2,5 @@
   "enabled": true,
   "check_interval_hours": 6,
   "allow_prerelease": false,
-  "require_publisher_verification": true
+  "require_publisher_verification": false
 }

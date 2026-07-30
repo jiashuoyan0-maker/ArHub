@@ -45,6 +45,43 @@ test('release upload and checksum asset allowlists stay aligned', () => {
   assert.doesNotMatch(checksumScript, /builder-debug\.yml/);
 });
 
+test('official Windows releases are explicitly unsigned and retain integrity artifacts', () => {
+  const releaseWorkflow = fs.readFileSync(path.join(workflowDir, 'release-windows.yml'), 'utf8');
+  const updaterConfig = JSON.parse(
+    fs.readFileSync(path.join(__dirname, '..', 'updater-config.json'), 'utf8'),
+  );
+  assert.match(releaseWorkflow, /-UnsignedRelease\b/);
+  assert.match(releaseWorkflow, /-RequireUnsigned\b/);
+  assert.doesNotMatch(releaseWorkflow, /WINDOWS_CERTIFICATE|AZURE_TRUSTED_SIGNING|azure\/login/);
+  assert.doesNotMatch(releaseWorkflow, /^\s*environment:\s*windows-release\s*$/m);
+  assert.equal(updaterConfig.require_publisher_verification, false);
+  assert.match(releaseWorkflow, /SHA256SUMS\.txt/);
+  assert.match(releaseWorkflow, /attest-build-provenance/);
+});
+
+test('runtime archives exclude volatile timestamps for reproducible hashes', () => {
+  const packageRuntime = fs.readFileSync(
+    path.join(__dirname, '..', 'scripts', 'package-runtime.ps1'),
+    'utf8',
+  );
+  for (const option of ['-mtm=off', '-mta=off', '-mtc=off']) {
+    assert.ok(packageRuntime.includes(`'${option}'`));
+  }
+});
+
+test('runtime workflow verifies and reuses only the explicitly configured locked cache', () => {
+  const runtimeWorkflow = fs.readFileSync(path.join(workflowDir, 'runtime-bundle.yml'), 'utf8');
+  const packageRuntime = fs.readFileSync(
+    path.join(__dirname, '..', 'scripts', 'package-runtime.ps1'),
+    'utf8',
+  );
+  assert.match(runtimeWorkflow, /ARHUB_RUNTIME_BUNDLE_CACHE/);
+  assert.match(runtimeWorkflow, /-ArchiveSeedDir/);
+  assert.match(runtimeWorkflow, /-ReuseExistingArchives/);
+  assert.match(packageRuntime, /Locked archive seed size mismatch/);
+  assert.match(packageRuntime, /Locked archive seed hash mismatch/);
+});
+
 test('Windows CI uses portable Node test discovery and avoids duplicate branch runs', () => {
   const quality = fs.readFileSync(path.join(workflowDir, 'quality.yml'), 'utf8');
   const packageMetadata = JSON.parse(

@@ -1,4 +1,4 @@
-name: Signed Windows Release
+name: Windows Release
 
 on:
   push:
@@ -12,7 +12,7 @@ on:
         type: string
 
 concurrency:
-  group: signed-release-${{ github.ref }}
+  group: windows-release-${{ github.ref }}
   cancel-in-progress: false
 
 permissions:
@@ -24,16 +24,8 @@ jobs:
   build-and-release:
     runs-on: [self-hosted, Windows, X64, arhub-release]
     timeout-minutes: 360
-    environment: windows-release
     env:
       GH_TOKEN: ${{ github.token }}
-      ARHUB_PUBLISHER_NAME: ${{ secrets.ARHUB_PUBLISHER_NAME }}
-      ARHUB_SIGNING_PROVIDER: ${{ vars.ARHUB_SIGNING_PROVIDER || 'pfx' }}
-      WINDOWS_CERTIFICATE_BASE64: ${{ secrets.WINDOWS_CERTIFICATE_BASE64 }}
-      WINDOWS_CERTIFICATE_PASSWORD: ${{ secrets.WINDOWS_CERTIFICATE_PASSWORD }}
-      AZURE_TRUSTED_SIGNING_ENDPOINT: ${{ vars.AZURE_TRUSTED_SIGNING_ENDPOINT }}
-      AZURE_TRUSTED_SIGNING_ACCOUNT: ${{ vars.AZURE_TRUSTED_SIGNING_ACCOUNT }}
-      AZURE_TRUSTED_SIGNING_PROFILE: ${{ vars.AZURE_TRUSTED_SIGNING_PROFILE }}
 
     steps:
       - name: Resolve release tag
@@ -100,18 +92,10 @@ jobs:
           powershell -NoProfile -ExecutionPolicy Bypass -File scripts/restore-runtime.ps1 -BundleDir .runtime/bundle -DestinationDir .runtime/full
           Remove-Item -LiteralPath .runtime/bundle -Recurse -Force
 
-      - name: Sign in to Azure
-        if: env.ARHUB_SIGNING_PROVIDER == 'azure'
-        uses: azure/login@a457da9ea143d694b1b9c7c869ebb04ebe844ef5 # v2
-        with:
-          client-id: ${{ secrets.AZURE_CLIENT_ID }}
-          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
-          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
-
-      - name: Build and verify signed installer
+      - name: Build and verify unsigned installer
         shell: powershell
         run: |
-          powershell -NoProfile -ExecutionPolicy Bypass -File scripts/build-windows.ps1 -RuntimeDir .runtime/full -SigningProvider $env:ARHUB_SIGNING_PROVIDER -SkipTests
+          powershell -NoProfile -ExecutionPolicy Bypass -File scripts/build-windows.ps1 -RuntimeDir .runtime/full -UnsignedRelease -SkipTests
 
       - name: Reclaim build space and smoke-test installer
         shell: powershell
@@ -120,7 +104,7 @@ jobs:
           Remove-Item -LiteralPath release/win-unpacked -Recurse -Force
           $installer = @(Get-ChildItem release -File -Filter 'ArHub-Setup-*.exe')
           if ($installer.Count -ne 1) { throw "Expected one installer, found $($installer.Count)." }
-          powershell -NoProfile -ExecutionPolicy Bypass -File scripts/smoke-test-installer.ps1 -InstallerPath $installer[0].FullName -PublisherName $env:ARHUB_PUBLISHER_NAME
+          powershell -NoProfile -ExecutionPolicy Bypass -File scripts/smoke-test-installer.ps1 -InstallerPath $installer[0].FullName -RequireUnsigned
           powershell -NoProfile -ExecutionPolicy Bypass -File scripts/create-checksums.ps1
 
       - name: Attest release artifacts

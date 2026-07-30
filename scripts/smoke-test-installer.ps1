@@ -5,6 +5,7 @@ param(
     [string]$InstallDir,
     [string]$PublisherName = $env:ARHUB_PUBLISHER_NAME,
     [switch]$AllowUnsigned,
+    [switch]$RequireUnsigned,
     [switch]$PreserveInstallOnFailure,
     [int]$StartupTimeoutSeconds = 120,
     [string]$ReportPath
@@ -15,6 +16,7 @@ Set-StrictMode -Version Latest
 . (Join-Path $PSScriptRoot 'signing-helpers.ps1')
 
 $projectRoot = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path
+if ($AllowUnsigned -and $RequireUnsigned) { throw 'AllowUnsigned and RequireUnsigned are mutually exclusive.' }
 $smokeRoot = [System.IO.Path]::GetFullPath((Join-Path $env:LOCALAPPDATA 'ArHub\smoke'))
 if (-not $InstallDir) { $InstallDir = Join-Path $smokeRoot 'app' }
 $install = [System.IO.Path]::GetFullPath($InstallDir)
@@ -22,7 +24,7 @@ $smokePrefix = $smokeRoot.TrimEnd('\') + '\'
 if (-not $install.StartsWith($smokePrefix, [System.StringComparison]::OrdinalIgnoreCase)) {
     throw "Smoke-test install directory must stay inside $smokeRoot"
 }
-if (-not $AllowUnsigned -and [string]::IsNullOrWhiteSpace($PublisherName)) {
+if (-not $AllowUnsigned -and -not $RequireUnsigned -and [string]::IsNullOrWhiteSpace($PublisherName)) {
     throw 'PublisherName is required for a signed installer smoke test.'
 }
 
@@ -52,6 +54,12 @@ function Assert-SafeSmokePath([string]$Path) {
 
 function Assert-ReleaseSignature([string]$Path) {
     $signature = Get-AuthenticodeSignature -LiteralPath $Path
+    if ($RequireUnsigned) {
+        if ($signature.Status -ne 'NotSigned') {
+            throw "Official unsigned release target must be NotSigned: $Path ($($signature.Status))"
+        }
+        return $signature.Status.ToString()
+    }
     if ($AllowUnsigned) {
         if ($signature.Status -notin @('Valid', 'NotSigned')) {
             throw "Unexpected signature status for $Path`: $($signature.Status)"

@@ -6,7 +6,7 @@ const path = require('path');
 const DEFAULT_CONFIG = Object.freeze({
   check_interval_hours: 6,
   allow_prerelease: false,
-  require_publisher_verification: true,
+  require_publisher_verification: false,
   user_data_dir: null,
   update_config_path: null,
 });

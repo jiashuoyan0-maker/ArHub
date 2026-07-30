@@ -647,7 +647,7 @@ async function initUpdater() {
     enabled: true,
     check_interval_hours: 6,
     allow_prerelease: false,
-    require_publisher_verification: true,
+    require_publisher_verification: false,
   };
   try {
     const cfgPath = path.join(APP_ROOT, 'updater-config.json');
@@ -665,7 +665,7 @@ async function initUpdater() {
   updater = new Updater({
     check_interval_hours: updateCfg.check_interval_hours,
     allow_prerelease: updateCfg.allow_prerelease,
-    require_publisher_verification: updateCfg.require_publisher_verification !== false,
+    require_publisher_verification: updateCfg.require_publisher_verification === true,
     user_data_dir: app.getPath('userData'),
     update_config_path: path.join(process.resourcesPath, 'app-update.yml'),
     logger: console,

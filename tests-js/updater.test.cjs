@@ -31,7 +31,7 @@ class FakeAutoUpdater extends EventEmitter {
       if (this.nextCheck === 'available') {
         this.emit('update-available', {
           version: '1.1.0',
-          releaseNotes: [{ version: '1.1.0', note: 'Signed release' }],
+          releaseNotes: [{ version: '1.1.0', note: 'Open-source release' }],
           releaseDate: '2026-07-30T00:00:00.000Z',
           files: [{ url: 'ArHub-Setup-1.1.0-x64.exe', size: 2048, sha512: 'abc' }],
         });
@@ -58,7 +58,7 @@ class FakeAutoUpdater extends EventEmitter {
 function createFixture() {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'arhub-updater-'));
   const configPath = path.join(root, 'app-update.yml');
-  fs.writeFileSync(configPath, 'provider: github\npublisherName:\n  - ArHub Test Publisher\n', 'utf8');
+  fs.writeFileSync(configPath, 'provider: github\n', 'utf8');
   const autoUpdater = new FakeAutoUpdater();
   const updater = new Updater(
     {
@@ -84,17 +84,36 @@ test('release notes are normalized for the renderer', () => {
   assert.equal(normalizeReleaseNotes([{ version: '1.2.0', note: 'Changes' }]), 'v1.2.0: Changes');
 });
 
-test('secure updater refuses a config without publisher verification', () => {
+test('publisher verification remains available for an explicitly signed build', () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'arhub-updater-invalid-'));
   const configPath = path.join(root, 'app-update.yml');
   fs.writeFileSync(configPath, 'provider: github\n', 'utf8');
   assert.throws(
-    () => new Updater({ user_data_dir: root, update_config_path: configPath }, {
+    () => new Updater({
+      user_data_dir: root,
+      update_config_path: configPath,
+      require_publisher_verification: true,
+    }, {
       autoUpdater: new FakeAutoUpdater(),
       CancellationToken: FakeCancellationToken,
     }),
     /publisherName is missing/,
   );
+  fs.rmSync(root, { recursive: true, force: true });
+});
+
+test('official unsigned updates do not require publisherName', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'arhub-updater-unsigned-'));
+  const configPath = path.join(root, 'app-update.yml');
+  fs.writeFileSync(configPath, 'provider: github\n', 'utf8');
+  assert.doesNotThrow(() => new Updater({
+    user_data_dir: root,
+    update_config_path: configPath,
+    require_publisher_verification: false,
+  }, {
+    autoUpdater: new FakeAutoUpdater(),
+    CancellationToken: FakeCancellationToken,
+  }));
   fs.rmSync(root, { recursive: true, force: true });
 });
 

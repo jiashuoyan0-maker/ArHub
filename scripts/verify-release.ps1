@@ -2,7 +2,8 @@
 param(
     [string]$ReleaseDir,
     [string]$PublisherName = $env:ARHUB_PUBLISHER_NAME,
-    [switch]$AllowUnsigned
+    [switch]$AllowUnsigned,
+    [switch]$RequireUnsigned
 )
 
 $ErrorActionPreference = 'Stop'
@@ -11,6 +12,7 @@ Set-StrictMode -Version Latest
 if (-not $ReleaseDir) { $ReleaseDir = Join-Path $PSScriptRoot '..\release' }
 $release = (Resolve-Path -LiteralPath $ReleaseDir).Path
 $issues = New-Object System.Collections.Generic.List[string]
+if ($AllowUnsigned -and $RequireUnsigned) { throw 'AllowUnsigned and RequireUnsigned are mutually exclusive.' }
 
 $installers = @(Get-ChildItem -LiteralPath $release -File -Filter 'ArHub-Setup-*.exe')
 if ($installers.Count -ne 1) { $issues.Add("Expected exactly one installer, found $($installers.Count).") }
@@ -48,6 +50,12 @@ if (Test-Path -LiteralPath $elevationHelper) { $signatureTargets += Get-Item -Li
 $signatureTargets += $installers
 foreach ($target in $signatureTargets) {
     $signature = Get-AuthenticodeSignature -LiteralPath $target.FullName
+    if ($RequireUnsigned) {
+        if ($signature.Status -ne 'NotSigned') {
+            $issues.Add("Official unsigned release target must be NotSigned: $($target.Name) ($($signature.Status))")
+        }
+        continue
+    }
     if ($AllowUnsigned) {
         if ($signature.Status -notin @('Valid', 'NotSigned')) {
             $issues.Add("Unexpected signature status for $($target.Name): $($signature.Status)")
@@ -82,10 +90,10 @@ if (Test-Path -LiteralPath $latest) {
     $yaml = Get-Content -LiteralPath $latest -Encoding UTF8 | Out-String
     if ($yaml -notmatch '(?m)^sha512:\s*\S+') { $issues.Add('latest.yml does not contain sha512.') }
 }
-if (-not $AllowUnsigned -and @($installers | Where-Object Name -Like '*-unsigned.exe').Count -gt 0) {
-    $issues.Add('A formal release cannot contain an unsigned-suffixed installer.')
+if (($RequireUnsigned -or -not $AllowUnsigned) -and @($installers | Where-Object Name -Like '*-unsigned.exe').Count -gt 0) {
+    $issues.Add('A formal release cannot contain the local-test -unsigned suffix.')
 }
-if (-not $AllowUnsigned) {
+if (-not $AllowUnsigned -and -not $RequireUnsigned) {
     $appUpdatePath = Join-Path $unpacked 'resources\app-update.yml'
     if (Test-Path -LiteralPath $appUpdatePath) {
         $appUpdateYaml = Get-Content -LiteralPath $appUpdatePath -Encoding UTF8 | Out-String

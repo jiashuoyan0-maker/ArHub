@@ -6,6 +6,7 @@ param(
     [int]$VolumeSizeMB = 1800,
     [ValidateRange(0, 9)]
     [int]$CompressionLevel = 7,
+    [string]$ArchiveSeedDir,
     [switch]$ReuseExistingArchives,
     [switch]$UpdateRepositoryManifest
 )
@@ -18,6 +19,19 @@ $lockPath = Join-Path $projectRoot 'packaging\runtime-lock.json'
 $pythonLockPath = Join-Path $projectRoot 'packaging\python-requirements.lock.txt'
 $manifest = Get-Content -LiteralPath $manifestPath -Encoding UTF8 | ConvertFrom-Json
 $runtime = (Resolve-Path -LiteralPath $RuntimeDir).Path
+$archiveSeed = $null
+$expectedBundle = $null
+if ($ArchiveSeedDir) {
+    $archiveSeed = (Resolve-Path -LiteralPath $ArchiveSeedDir).Path
+    $expectedBundlePath = Join-Path $projectRoot 'packaging\runtime-bundle.json'
+    if (-not (Test-Path -LiteralPath $expectedBundlePath -PathType Leaf)) {
+        throw "Committed runtime bundle manifest is required when ArchiveSeedDir is used: $expectedBundlePath"
+    }
+    $expectedBundle = Get-Content -LiteralPath $expectedBundlePath -Encoding UTF8 | ConvertFrom-Json
+    if ($expectedBundle.runtimeVersion -ne $manifest.runtimeVersion) {
+        throw 'Archive seed manifest version does not match the runtime manifest.'
+    }
+}
 
 if (-not $OutputDir) {
     $OutputDir = Join-Path $projectRoot ".runtime\bundles\$($manifest.runtimeVersion)"
@@ -52,10 +66,34 @@ try {
         $parts = @(Get-ChildItem -LiteralPath $output -File | Where-Object {
             $_.Name -eq $archiveName -or $_.Name -like "$archiveName.*"
         } | Sort-Object Name)
+        if ($parts.Count -eq 0 -and $archiveSeed) {
+            $expectedComponent = $expectedBundle.components | Where-Object name -eq $name | Select-Object -First 1
+            if (-not $expectedComponent) { throw "Committed bundle does not contain component: $name" }
+            foreach ($expectedPart in @($expectedComponent.parts)) {
+                $source = Join-Path $archiveSeed ([string]$expectedPart.name)
+                if (-not (Test-Path -LiteralPath $source -PathType Leaf)) {
+                    throw "Locked archive seed is missing: $source"
+                }
+                $sourceItem = Get-Item -LiteralPath $source
+                if ($sourceItem.Length -ne [int64]$expectedPart.bytes) {
+                    throw "Locked archive seed size mismatch: $($expectedPart.name)"
+                }
+                $sourceHash = (Get-FileHash -LiteralPath $source -Algorithm SHA256).Hash.ToLowerInvariant()
+                if ($sourceHash -ne [string]$expectedPart.sha256) {
+                    throw "Locked archive seed hash mismatch: $($expectedPart.name)"
+                }
+                Copy-Item -LiteralPath $source -Destination (Join-Path $output ([string]$expectedPart.name))
+            }
+            $parts = @(Get-ChildItem -LiteralPath $output -File | Where-Object {
+                $_.Name -eq $archiveName -or $_.Name -like "$archiveName.*"
+            } | Sort-Object Name)
+            Write-Host "Staged locked runtime archive: $name"
+        }
         if ($parts.Count -eq 0 -or -not $ReuseExistingArchives) {
             if ($parts.Count -gt 0) { throw "Archive already exists for ${name}. Use -ReuseExistingArchives or an empty output directory." }
             $arguments = @(
                 'a', '-t7z', "-mx=$CompressionLevel", '-mmt=on', '-ms=on', '-y',
+                '-mtm=off', '-mta=off', '-mtc=off',
                 '-bsp0', '-bso0', '-bse1', $archivePath, $name
             )
             if ($name -eq 'python') { $arguments = $arguments[0..5] + "-v${VolumeSizeMB}m" + $arguments[6..($arguments.Count - 1)] }

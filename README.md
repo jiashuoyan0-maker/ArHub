@@ -73,7 +73,7 @@ Agent 对话是主工作区。打开文档后，Markdown/LaTeX 编辑器会在�
 | DOCX 与提取 | 可运行源码 | Node 高保真引擎、python-docx fallback、PDF/DOCX 文本提取 |
 | 前端 | 恢复产物 | Codex 式动态工作台、亮暗主题；尚无可复现的模块化前端构建 |
 | Skills 与扩展 | 明文可审查 | Skill、模板和声明式 profile 不需要激活或解密 |
-| Windows 安装包 | 发布候选已验证 | 完整 runtime 锁、NSIS、签名范围隔离、SBOM、校验和、安装冒烟测试与 GitHub 发布工作流；正式产物必须使用可信证书 |
+| Windows 安装包 | 发布候选已验证 | 完整 runtime 锁、NSIS、SBOM、校验和、安装冒烟测试与 GitHub 发布工作流；当前官方产物不提供 Authenticode 签名 |
 
 ## 主要能力
 
@@ -138,7 +138,7 @@ npm run audit:open-source
 git diff --check
 ```
 
-当前回归集包含 30 个 Python 测试和 9 个 Node 测试，覆盖模型 URL、LLM 请求、Agent 工具循环、工作流
+当前回归集包含 30 个 Python 测试和 17 个 Node 测试，覆盖模型 URL、LLM 请求、Agent 工具循环、工作流
 状态、编辑器安全边界、diff/apply/undo、DOCX 导出和提取队列。发布候选还经过
 真实浏览器验收，包括动态文件面板、Agent 工作区、亮色主题和 DOCX 预览。
 
@@ -164,14 +164,24 @@ powershell -NoProfile -ExecutionPolicy Bypass -File scripts\smoke-test-installer
   -InstallerPath release\ArHub-Setup-1.0.9-x64-unsigned.exe -AllowUnsigned
 ```
 
-未签名命令只生成文件名带 `-unsigned` 的本地测试件，且自动更新保持禁用。
-正式 Release 默认强制可信 Authenticode 签名、时间戳、发布者匹配、SHA-256、
-CycloneDX SBOM 和 GitHub 构建来源证明。签名配置及发布步骤见
-[Windows 发布指南](docs/RELEASING.md)。
+`package:win:unsigned` 只生成文件名带 `-unsigned` 的本地测试件。官方 Release
+同样暂不提供 Authenticode 签名，但使用正常安装器文件名，并保留自动更新、
+SHA-512 更新文件校验、`SHA256SUMS.txt`、CycloneDX SBOM 和 GitHub 构建来源证明。
 
-正式构建只使用 ArHub 证书签署主程序、更新提权助手、安装器和卸载器；打包后的
-Python、Node.js、Git、Pandoc、Draw.io 与 MiKTeX 会再次按精确运行时锁验证，
-不会覆盖上游厂商签名。每周维护任务检查 npm、后端与完整捆绑 Python 环境的
+> [!IMPORTANT]
+> ArHub 是个人维护的开源项目，当前 Windows 安装器没有购买代码签名证书。
+> Windows SmartScreen 因此可能显示“Windows 已保护你的电脑”或“未知发布者”。
+> 请只从本仓库的 GitHub Releases 下载，先用下方命令核对 SHA-256；确认一致后，
+> 在 SmartScreen 中选择“更多信息” -> “仍要运行”。不要关闭 Microsoft Defender、
+> SmartScreen 或其他系统级安全防护，也不要从网盘或第三方镜像获取安装包。
+
+```powershell
+Get-FileHash .\ArHub-Setup-1.0.9-x64.exe -Algorithm SHA256
+```
+
+将输出与同一 Release 中 `SHA256SUMS.txt` 的对应条目逐字核对。打包后的 Python、
+Node.js、Git、Pandoc、Draw.io 与 MiKTeX 会按精确运行时锁验证，不会覆盖上游厂商
+已有签名。每周维护任务检查 npm、后端与完整捆绑 Python 环境的
 安全公告及完整运行时版本，Dependabot 负责 npm、pip 和 GitHub Actions 更新，
 CodeQL 定期扫描 JavaScript 与 Python 源码。
 
@@ -206,7 +216,8 @@ CodeQL 定期扫描 JavaScript 与 Python 源码。
 3. 三个旧字节码 DOCX helper 的原始源码无法恢复，但当前 DOCX 导出已由新的
    Node/Python 实现替代，不再依赖这些字节码。
 4. provider-neutral 不等于 provider-identical；模型能力差异仍需按服务商验证。
-5. 在可信代码签名证书和干净 Windows 安装验收完成前，不发布正式二进制 Release。
+5. Windows 官方安装器当前未签名；下载者必须从官方 Release 获取并核对 SHA-256，
+   发布工作流仍会完成安装、启动、后端就绪、前端加载和卸载闭环验收。
 
 贡献前请阅读 [CONTRIBUTING.md](CONTRIBUTING.md)。安全问题请按
 [SECURITY.md](SECURITY.md) 处理。第三方许可见
