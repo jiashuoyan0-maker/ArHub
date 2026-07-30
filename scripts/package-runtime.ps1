@@ -139,7 +139,19 @@ $bundle = [ordered]@{
 $utf8 = New-Object System.Text.UTF8Encoding($false)
 $bundleJson = $bundle | ConvertTo-Json -Depth 10
 $bundlePath = Join-Path $output 'runtime-bundle.json'
-[System.IO.File]::WriteAllText($bundlePath, $bundleJson + "`n", $utf8)
+if ($UpdateRepositoryManifest) {
+    [System.IO.File]::WriteAllText($bundlePath, $bundleJson + "`n", $utf8)
+} elseif (Test-Path -LiteralPath (Join-Path $projectRoot 'packaging\runtime-bundle.json') -PathType Leaf) {
+    $committedBundlePath = Join-Path $projectRoot 'packaging\runtime-bundle.json'
+    $committedJson = Get-Content -LiteralPath $committedBundlePath -Encoding UTF8 | ConvertFrom-Json | ConvertTo-Json -Depth 10
+    $generatedJson = $bundle | ConvertTo-Json -Depth 10
+    if ($committedJson -ne $generatedJson) {
+        throw 'Generated runtime bundle does not match the committed lock.'
+    }
+    Copy-Item -LiteralPath $committedBundlePath -Destination $bundlePath
+} else {
+    [System.IO.File]::WriteAllText($bundlePath, $bundleJson + "`n", $utf8)
+}
 Copy-Item -LiteralPath $manifestPath, $lockPath, $pythonLockPath -Destination $output
 
 $checksumFiles = @(Get-ChildItem -LiteralPath $output -File | Where-Object { $_.Name -ne 'SHA256SUMS.txt' } | Sort-Object Name)
