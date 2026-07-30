@@ -53,7 +53,7 @@ try {
     $builder = Join-Path $projectRoot 'node_modules\.bin\electron-builder.cmd'
     if (-not (Test-Path -LiteralPath $builder -PathType Leaf)) { throw "electron-builder is missing: $builder" }
     $arguments = @('--win', 'nsis', '--x64', '--config', 'electron-builder.config.cjs')
-    if ($Publish) { $arguments += @('--publish', 'always') }
+    $arguments += if ($Publish) { @('--publish', 'always') } else { @('--publish', 'never') }
     & $builder @arguments
     if ($LASTEXITCODE -ne 0) { throw "electron-builder failed with exit code $LASTEXITCODE" }
 

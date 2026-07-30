@@ -75,6 +75,41 @@ jobs:
           npm test
           npm run audit:open-source
 
+      - name: Detect reusable release artifacts
+        id: existing
+        shell: powershell
+        run: |
+          $tag = '${{ steps.release.outputs.tag }}'
+          $releases = @(gh release list --repo "${{ github.repository }}" --limit 100 --json tagName | ConvertFrom-Json)
+          $exists = @($releases | Where-Object { $_.tagName -eq $tag }).Count -eq 1
+          $reuse = $false
+          if ($exists) {
+            $release = gh release view $tag --repo "${{ github.repository }}" --json assets | ConvertFrom-Json
+            $installers = @($release.assets | Where-Object { $_.name -like 'ArHub-Setup-*.exe' -and $_.name -notlike '*.blockmap' })
+            $blockmaps = @($release.assets | Where-Object { $_.name -like 'ArHub-Setup-*.exe.blockmap' })
+            $reuse = $installers.Count -eq 1 -and $blockmaps.Count -eq 1
+          }
+          "exists=$($exists.ToString().ToLowerInvariant())" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
+          "reuse=$($reuse.ToString().ToLowerInvariant())" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
+
+      - name: Download and verify reusable release artifacts
+        if: steps.existing.outputs.reuse == 'true'
+        shell: powershell
+        run: |
+          $tag = '${{ steps.release.outputs.tag }}'
+          New-Item -ItemType Directory -Path release -Force | Out-Null
+          gh release download $tag --repo "${{ github.repository }}" --pattern 'ArHub-Setup-*.exe' --pattern 'ArHub-Setup-*.exe.blockmap' --dir release
+          $release = gh release view $tag --repo "${{ github.repository }}" --json assets | ConvertFrom-Json
+          $files = @(Get-ChildItem release -File | Where-Object { $_.Name -like 'ArHub-Setup-*.exe' -or $_.Name -like 'ArHub-Setup-*.exe.blockmap' })
+          if ($files.Count -ne 2) { throw "Expected installer and blockmap, found $($files.Count) files." }
+          foreach ($file in $files) {
+            $asset = @($release.assets | Where-Object { $_.name -eq $file.Name })
+            if ($asset.Count -ne 1) { throw "Release asset metadata is missing or duplicated: $($file.Name)" }
+            $digest = 'sha256:' + (Get-FileHash -LiteralPath $file.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
+            if ($asset[0].digest -ne $digest) { throw "Release asset digest mismatch: $($file.Name)" }
+            if ([int64]$asset[0].size -ne $file.Length) { throw "Release asset size mismatch: $($file.Name)" }
+          }
+
       - name: Download locked runtime bundle
         shell: powershell
         run: |
@@ -93,15 +128,47 @@ jobs:
           Remove-Item -LiteralPath .runtime/bundle -Recurse -Force
 
       - name: Build and verify unsigned installer
+        if: steps.existing.outputs.reuse != 'true'
         shell: powershell
         run: |
           powershell -NoProfile -ExecutionPolicy Bypass -File scripts/build-windows.ps1 -RuntimeDir .runtime/full -UnsignedRelease -SkipTests
 
+      - name: Prepare metadata for reused installer
+        if: steps.existing.outputs.reuse == 'true'
+        shell: powershell
+        run: |
+          $installer = @(Get-ChildItem release -File -Filter 'ArHub-Setup-*.exe')
+          if ($installer.Count -ne 1) { throw "Expected one installer, found $($installer.Count)." }
+          $signature = Get-AuthenticodeSignature -LiteralPath $installer[0].FullName
+          if ($signature.Status -ne 'NotSigned') { throw "Official installer must be NotSigned: $($signature.Status)" }
+          $version = (Get-Content package.json -Encoding utf8 | ConvertFrom-Json).version
+          $sha512 = [System.Security.Cryptography.SHA512]::Create()
+          $stream = [System.IO.File]::OpenRead($installer[0].FullName)
+          try {
+            $encodedHash = [Convert]::ToBase64String($sha512.ComputeHash($stream))
+          } finally {
+            $stream.Dispose()
+            $sha512.Dispose()
+          }
+          $releaseDate = [DateTimeOffset]::Parse((git show -s --format=%cI '${{ steps.release.outputs.tag }}')).UtcDateTime.ToString('yyyy-MM-ddTHH:mm:ss.fffZ')
+          $lines = @(
+            "version: $version",
+            'files:',
+            "  - url: $($installer[0].Name)",
+            "    sha512: $encodedHash",
+            "    size: $($installer[0].Length)",
+            "path: $($installer[0].Name)",
+            "sha512: $encodedHash",
+            "releaseDate: '$releaseDate'"
+          )
+          [System.IO.File]::WriteAllLines((Join-Path 'release' 'latest.yml'), $lines, (New-Object System.Text.UTF8Encoding($false)))
+          powershell -NoProfile -ExecutionPolicy Bypass -File scripts/generate-sbom.ps1 -RuntimeDir .runtime/full
+
       - name: Reclaim build space and smoke-test installer
         shell: powershell
         run: |
-          Remove-Item -LiteralPath .runtime/full -Recurse -Force
-          Remove-Item -LiteralPath release/win-unpacked -Recurse -Force
+          Remove-Item -LiteralPath .runtime/full -Recurse -Force -ErrorAction SilentlyContinue
+          Remove-Item -LiteralPath release/win-unpacked -Recurse -Force -ErrorAction SilentlyContinue
           $installer = @(Get-ChildItem release -File -Filter 'ArHub-Setup-*.exe')
           if ($installer.Count -ne 1) { throw "Expected one installer, found $($installer.Count)." }
           powershell -NoProfile -ExecutionPolicy Bypass -File scripts/smoke-test-installer.ps1 -InstallerPath $installer[0].FullName -RequireUnsigned
@@ -134,4 +201,22 @@ jobs:
               $_.Name -eq 'installer-smoke-report.json'
             } | Select-Object -ExpandProperty FullName
           )
-          gh release create $tag @files --repo "${{ github.repository }}" --verify-tag --generate-notes --notes-file $notes --title "ArHub $tag" --latest
+          $releases = @(gh release list --repo "${{ github.repository }}" --limit 100 --json tagName | ConvertFrom-Json)
+          $exists = @($releases | Where-Object { $_.tagName -eq $tag }).Count -eq 1
+          if (-not $exists) {
+            gh release create $tag @files --repo "${{ github.repository }}" --verify-tag --generate-notes --notes-file $notes --title "ArHub $tag" --latest
+            exit $LASTEXITCODE
+          }
+          $release = gh release view $tag --repo "${{ github.repository }}" --json assets | ConvertFrom-Json
+          foreach ($path in $files) {
+            $file = Get-Item -LiteralPath $path
+            $digest = 'sha256:' + (Get-FileHash -LiteralPath $file.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
+            $asset = @($release.assets | Where-Object { $_.name -eq $file.Name })
+            if ($asset.Count -eq 1 -and $asset[0].digest -eq $digest -and [int64]$asset[0].size -eq $file.Length) {
+              Write-Host "Release asset already matches: $($file.Name)"
+              continue
+            }
+            gh release upload $tag $file.FullName --repo "${{ github.repository }}" --clobber
+            if ($LASTEXITCODE -ne 0) { throw "Failed to upload release asset: $($file.Name)" }
+          }
+          gh release edit $tag --repo "${{ github.repository }}" --notes-file $notes --title "ArHub $tag" --latest
