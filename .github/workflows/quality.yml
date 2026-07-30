@@ -4,6 +4,10 @@ on:
   push:
   pull_request:
 
+concurrency:
+  group: quality-${{ github.ref }}
+  cancel-in-progress: true
+
 permissions:
   contents: read
 
@@ -12,20 +16,32 @@ jobs:
     runs-on: windows-latest
     steps:
       - name: Check out repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
 
       - name: Set up Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: '20'
+          cache: npm
 
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
         with:
           python-version: '3.11'
 
+      - name: Install Node dependencies
+        run: npm ci
+
       - name: Install Python dependencies
-        run: python -m pip install -r backend/requirements.txt
+        run: python -m pip install -r backend/requirements.txt pip-audit
+
+      - name: Audit production Node dependencies
+        run: npm audit --omit=dev --registry=https://registry.npmjs.org
+
+      - name: Audit Python dependencies
+        run: |
+          python -m pip_audit -r backend/requirements.txt
+          python -m pip_audit -r packaging/python-requirements.lock.txt --no-deps --disable-pip
 
       - name: Check JavaScript syntax
         run: npm run check:js

@@ -891,7 +891,7 @@ for pdf in figures/fig_roadmap.pdf figures/fig_framework.pdf figures/fig_flow_*.
     # Use Python to check PDF page dimensions if possible
     dims=$($PYTHON -c "
 try:
-    from PyPDF2 import PdfReader
+    from pypdf import PdfReader
     r = PdfReader('$pdf')
     p = r.pages[0]
     w = float(p.mediabox.width) * 0.3528  # points to mm

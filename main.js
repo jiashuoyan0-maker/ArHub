@@ -20,6 +20,7 @@ const { Updater } = require('./updater');
 
 // ── 路径 ──
 const IS_DEV = !app.isPackaged;
+const IS_SMOKE_TEST = process.argv.includes('--arhub-smoke-test') || process.env.ARHUB_SMOKE_TEST === '1';
 const APP_ROOT = IS_DEV ? __dirname : path.join(process.resourcesPath, 'app');
 const RUNTIME_DIR = IS_DEV
   ? path.join(__dirname, 'runtime')
@@ -54,13 +55,11 @@ for (const level of ['log', 'warn', 'error']) {
   };
 }
 
-// ── 运行时完整性检查（应对杀毒软件误报删除 python.exe） ──
+// ── 运行时完整性检查 ──
 
 /**
- * 检查关键 runtime 文件是否完整。
- * Python embeddable 的 python.exe 没数字签名, 国内 Windows Defender / 360 / 火绒
- * 经常按行为规则识别为 "Trojan:Win32/Wacatac" 等误报并静默隔离。
- * 启动前如果文件丢了, 直接弹友好提示, 不要让用户看到神秘的 ENOENT。
+ * 检查完整版本所需的关键 runtime 文件。
+ * 这里只做快速存在性与体积检查；发布阶段会执行完整清单和签名校验。
  */
 function verifyRuntime() {
   if (IS_DEV) return [];  // dev 模式跳过
@@ -70,6 +69,10 @@ function verifyRuntime() {
     { file: path.join(RUNTIME_DIR, 'python', 'python311.dll'),   name: 'python311.dll',  minSize: 1024 * 1024 },
     { file: path.join(RUNTIME_DIR, 'python', 'python311.zip'),   name: 'python311.zip',  minSize: 1024 * 1024 },
     { file: path.join(RUNTIME_DIR, 'node',   'node.exe'),        name: 'node.exe',       minSize: 10 * 1024 * 1024 },
+    { file: path.join(RUNTIME_DIR, 'git', 'cmd', 'git.exe'),     name: 'git.exe',        minSize: 10 * 1024 },
+    { file: path.join(RUNTIME_DIR, 'pandoc', 'pandoc.exe'),      name: 'pandoc.exe',     minSize: 10 * 1024 * 1024 },
+    { file: path.join(RUNTIME_DIR, 'draw.io', 'draw.io.exe'),    name: 'draw.io.exe',    minSize: 50 * 1024 * 1024 },
+    { file: path.join(RUNTIME_DIR, 'texlive', 'miktex', 'bin', 'x64', 'xelatex.exe'), name: 'xelatex.exe', minSize: 100 * 1024 },
   ];
   const issues = [];
   for (const c of checks) {
@@ -93,33 +96,17 @@ function verifyRuntime() {
 
 /**
  * 把 verifyRuntime 的结果格式化成对用户友好的中文诊断对话框。
- * 重点是说明这是杀毒软件误报, 给出可操作的修复步骤, 而不是让用户对着 ENOENT 发懵。
  */
 function showRuntimeIssueDialog(issues) {
   const installDir = path.dirname(process.execPath);
   const fileList = issues.map(i => `  • runtime\\${path.basename(path.dirname(i.file))}\\${i.name}  ${i.reason}`).join('\n');
   const detail = [
-    '原因（最常见）：',
-    'Windows Defender / 360 / 火绒等杀毒软件把内嵌的 python.exe 误报为木马并自动隔离。',
-    '内嵌 Python 没有数字签名，部分杀毒软件按行为规则会误报，实际是安全的官方发行版。',
+    '安装中的完整运行环境不完整，可能是下载或安装中断，也可能是安全软件隔离了文件。',
     '',
-    '修复方法（任选其一）：',
+    '请先在安全软件的保护历史中确认文件来源，再从 ArHub 官方 GitHub Release',
+    '重新下载带数字签名的安装器并执行覆盖安装。不要从第三方网盘补拷单个运行文件。',
     '',
-    '【方法 1：恢复被隔离的文件 + 添加排除项】',
-    '  1. 打开「Windows 安全中心」→「病毒和威胁防护」→「保护历史记录」',
-    '     （或 360/火绒 → 隔离区/已处理威胁）',
-    '  2. 找到 python.exe，选择「允许」/「恢复」',
-    '  3. 进入「病毒和威胁防护设置」→「管理设置」→「添加或删除排除项」',
-    `  4. 添加文件夹排除：${installDir}`,
-    '  5. 重新启动 ArHub',
-    '',
-    '【方法 2：管理员 PowerShell 一键加白名单】',
-    '  右键开始菜单 →「Windows PowerShell (管理员)」，粘贴执行：',
-    `    Add-MpPreference -ExclusionPath "${installDir}"`,
-    '  然后重新安装本程序。',
-    '',
-    '【方法 3：彻底重装】',
-    '  先按方法 1 / 2 加排除项 → 卸载本程序 → 重新运行安装包。',
+    `当前安装目录：${installDir}`,
   ].join('\n');
 
   dialog.showMessageBoxSync({
@@ -190,8 +177,13 @@ function getMiKTeXDir() {
 }
 
 async function ensureMiKTeX() {
-  // 检查 xelatex 是否可用（不只是 MiKTeX 目录存在）
+  // 完整版本优先使用随应用分发的 MiKTeX/TeX 运行时。
   const { execSync } = require('child_process');
+  const bundledXelatex = path.join(RUNTIME_DIR, 'texlive', 'miktex', 'bin', 'x64', 'xelatex.exe');
+  if (fs.existsSync(bundledXelatex)) {
+    console.log('[MiKTeX] Using bundled runtime:', bundledXelatex);
+    return;
+  }
   
   // 先检查系统上有没有 xelatex
   let hasXelatex = false;
@@ -474,6 +466,27 @@ function createWindow() {
     show: false,
   });
 
+  if (IS_SMOKE_TEST) {
+    let smokeFinished = false;
+    mainWindow.webContents.once('did-finish-load', () => {
+      if (smokeFinished) return;
+      smokeFinished = true;
+      console.log('[SmokeTest] Frontend loaded');
+      setTimeout(() => {
+        isQuitting = true;
+        app.quit();
+      }, 500);
+    });
+    mainWindow.webContents.once('did-fail-load', (_event, errorCode, errorDescription, validatedURL, isMainFrame) => {
+      if (!isMainFrame || smokeFinished) return;
+      smokeFinished = true;
+      process.exitCode = 1;
+      console.error(`[SmokeTest] Frontend failed to load (${errorCode}): ${errorDescription} ${validatedURL}`);
+      isQuitting = true;
+      app.quit();
+    });
+  }
+
   // 禁用缓存，确保每次加载最新的前端文件
   mainWindow.webContents.session.clearCache();
 
@@ -493,7 +506,7 @@ function createWindow() {
   });
 
   mainWindow.once('ready-to-show', () => {
-    mainWindow.show();
+    if (!IS_SMOKE_TEST) mainWindow.show();
   });
 
   // 关闭时最小化到托盘
@@ -598,6 +611,29 @@ app.on('ready', async () => {
 // 自动更新
 // ============================================================
 let updater = null;
+let updaterTimer = null;
+
+function sendUpdateAvailable(result) {
+  if (!result || !result.hasUpdate || !mainWindow || mainWindow.isDestroyed()) return;
+  mainWindow.webContents.send('update-available', {
+    version: result.version,
+    changelog: result.changelog,
+    fileCount: result.fileCount || result.changedFiles.length,
+    totalSize: result.totalSize,
+  });
+}
+
+async function checkAndNotifyUpdate(force = false) {
+  if (!updater) return { hasUpdate: false, reason: 'updater not initialized' };
+  const result = await updater.checkForUpdate({ force });
+  if (result.hasUpdate) {
+    console.log(`[Updater] update available: v${result.version} (${result.fileCount} artifacts, ${(result.totalSize / 1024 / 1024).toFixed(2)} MB)`);
+    sendUpdateAvailable(result);
+  } else {
+    console.log(`[Updater] no update: ${result.reason}`);
+  }
+  return result;
+}
 
 async function initUpdater() {
   // 仅打包模式下启用更新 (开发模式不更新)
@@ -606,10 +642,12 @@ async function initUpdater() {
     return;
   }
 
-  // 读取更新配置 (打包时随 app 分发, 也可以从 user_data 读用户自定义)
+  // 发布源由打包生成的 app-update.yml 固定到官方 GitHub Releases。
   let updateCfg = {
-    server_url: 'https://update.example.com',  // ⛔ 改成你的真实域名
+    enabled: true,
     check_interval_hours: 6,
+    allow_prerelease: false,
+    require_publisher_verification: true,
   };
   try {
     const cfgPath = path.join(APP_ROOT, 'updater-config.json');
@@ -619,62 +657,27 @@ async function initUpdater() {
   } catch (e) {
     console.warn('[Updater] config load failed:', e.message);
   }
-  updateCfg.server_url = String(updateCfg.server_url || '').replace(/\/+$/, '');
-  if (!updateCfg.server_url || Number(updateCfg.check_interval_hours) <= 0) {
+  if (!updateCfg.enabled || Number(updateCfg.check_interval_hours) <= 0) {
     console.log('[Updater] disabled by config');
     return;
   }
-  try {
-    const updateUrl = new URL(updateCfg.server_url);
-    if (!['http:', 'https:'].includes(updateUrl.protocol)) {
-      console.warn('[Updater] invalid server_url, skip auto-update');
-      return;
-    }
-  } catch {
-    console.warn('[Updater] invalid server_url, skip auto-update');
-    return;
-  }
-
-  // 当前版本号 (从 package.json 读)
-  let currentVersion = '1.0.0';
-  try {
-    const pkgPath = path.join(APP_ROOT, 'package.json');
-    if (fs.existsSync(pkgPath)) {
-      currentVersion = JSON.parse(fs.readFileSync(pkgPath, 'utf8')).version || '1.0.0';
-    }
-  } catch {}
-
-  // 安装目录 = process.resourcesPath 的父目录
-  const installDir = path.dirname(process.resourcesPath);
-  const userDataDir = app.getPath('userData');
 
   updater = new Updater({
-    server_url: updateCfg.server_url,
-    install_dir: installDir,
-    current_version: currentVersion,
     check_interval_hours: updateCfg.check_interval_hours,
-    user_data_dir: userDataDir,
+    allow_prerelease: updateCfg.allow_prerelease,
+    require_publisher_verification: updateCfg.require_publisher_verification !== false,
+    user_data_dir: app.getPath('userData'),
+    update_config_path: path.join(process.resourcesPath, 'app-update.yml'),
+    logger: console,
   });
 
-  // 静默检查
+  updaterTimer = setInterval(() => {
+    checkAndNotifyUpdate(false).catch((error) => console.error('[Updater] scheduled check failed:', error));
+  }, 60 * 60 * 1000);
+  updaterTimer.unref();
+
   try {
-    const result = await updater.checkForUpdate();
-    if (result.hasUpdate) {
-      console.log(`[Updater] update available: v${result.version} (${result.changedFiles.length} files, ${(result.totalSize/1024/1024).toFixed(2)} MB)`);
-      // 通知前端弹气泡
-      if (mainWindow && !mainWindow.isDestroyed()) {
-        mainWindow.webContents.send('update-available', {
-          version: result.version,
-          changelog: result.changelog,
-          fileCount: result.changedFiles.length,
-          totalSize: result.totalSize,
-        });
-      }
-      // 缓存这次检查结果, 用户点更新时直接用
-      updater._lastCheck = result;
-    } else {
-      console.log(`[Updater] no update: ${result.reason}`);
-    }
+    await checkAndNotifyUpdate(false);
   } catch (e) {
     console.error('[Updater] check error:', e);
   }
@@ -700,19 +703,15 @@ ipcMain.handle('updater:start-download', async () => {
 // IPC: 前端触发应用更新 + 重启
 ipcMain.handle('updater:apply-and-restart', async () => {
   if (!updater) return { ok: false, error: 'updater not initialized' };
-  // 找当前 exe 路径
-  const mainExePath = process.execPath;
-  updater.applyUpdateAndRestart(mainExePath);
-  // ⛔ 关键: 先把 backend Python 进程杀掉, 否则它会占用 resources/app/backend/*.pyc
-  // 导致 robocopy 写入失败. (helper.bat 已有 2s 等待 + robocopy /R:3 重试,
-  //  但能提前杀就不要等)
-  isQuitting = true;
-  killBackend();
-  // 给 helper 一秒启动, 然后主进程退出 (helper 会等待 PID 消失再开始 robocopy)
-  setTimeout(() => {
-    app.quit();
-  }, 800);
-  return { ok: true };
+  try {
+    isQuitting = true;
+    killBackend();
+    setTimeout(() => updater.applyUpdateAndRestart(), 250);
+    return { ok: true };
+  } catch (error) {
+    isQuitting = false;
+    return { ok: false, error: error.message };
+  }
 });
 
 // IPC: 前端取消下载
@@ -736,17 +735,12 @@ ipcMain.handle('updater:get-cached', async () => {
 // IPC: 前端手动检查更新
 ipcMain.handle('updater:check-now', async () => {
   if (!updater) return { hasUpdate: false, reason: 'not initialized' };
-  // 强制检查 (清除限流)
-  const state = updater._loadState();
-  state.last_check = 0;
-  updater._saveState(state);
-  const result = await updater.checkForUpdate();
-  if (result.hasUpdate) updater._lastCheck = result;
-  return result;
+  return checkAndNotifyUpdate(true);
 });
 
 app.on('before-quit', () => {
   isQuitting = true;
+  if (updaterTimer) clearInterval(updaterTimer);
   killBackend();
 });
 

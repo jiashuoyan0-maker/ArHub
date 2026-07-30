@@ -1,0 +1,4 @@
+self-hosted-runner:
+  labels:
+    - arhub-runtime
+    - arhub-release

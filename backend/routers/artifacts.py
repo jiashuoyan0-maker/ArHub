@@ -217,7 +217,7 @@ def _extract_text(filename: str, raw: bytes) -> str:
     if suffix in TEXT_SUFFIXES:
         return raw.decode("utf-8", errors="replace")
     if suffix == ".pdf":
-        from PyPDF2 import PdfReader
+        from pypdf import PdfReader
 
         reader = PdfReader(io.BytesIO(raw))
         return "\n\n".join(page.extract_text() or "" for page in reader.pages)

@@ -1,0 +1,82 @@
+{
+    "schemaVersion":  1,
+    "runtimeVersion":  "2026.07.30.3",
+    "architecture":  "x64",
+    "releaseTag":  "runtime-v2026.07.30.3",
+    "baseUrl":  "https://github.com/jiashuoyan0-maker/ArHub/releases/download/runtime-v2026.07.30.3",
+    "totalDownloadBytes":  1232767576,
+    "components":  [
+                       {
+                           "name":  "python",
+                           "extractFrom":  "arhub-runtime-2026.07.30.3-python.7z.001",
+                           "downloadBytes":  736981720,
+                           "parts":  [
+                                         {
+                                             "name":  "arhub-runtime-2026.07.30.3-python.7z.001",
+                                             "bytes":  736981720,
+                                             "sha256":  "dd2eb40d0ccd884665bba58dac244c9e90c145f8627618efadbb3d9ba3086768"
+                                         }
+                                     ]
+                       },
+                       {
+                           "name":  "node",
+                           "extractFrom":  "arhub-runtime-2026.07.30.3-node.7z",
+                           "downloadBytes":  121931630,
+                           "parts":  [
+                                         {
+                                             "name":  "arhub-runtime-2026.07.30.3-node.7z",
+                                             "bytes":  121931630,
+                                             "sha256":  "a989b696f5dc9c021499ffb67dd7f5bf0dbc5f6f24c6e3beb1e7109803ef9c98"
+                                         }
+                                     ]
+                       },
+                       {
+                           "name":  "git",
+                           "extractFrom":  "arhub-runtime-2026.07.30.3-git.7z",
+                           "downloadBytes":  78356624,
+                           "parts":  [
+                                         {
+                                             "name":  "arhub-runtime-2026.07.30.3-git.7z",
+                                             "bytes":  78356624,
+                                             "sha256":  "0cc24e9106521cf4f2c2debfd5469543a1cbffce28a1f2c8dac1e1daf459d452"
+                                         }
+                                     ]
+                       },
+                       {
+                           "name":  "pandoc",
+                           "extractFrom":  "arhub-runtime-2026.07.30.3-pandoc.7z",
+                           "downloadBytes":  23226707,
+                           "parts":  [
+                                         {
+                                             "name":  "arhub-runtime-2026.07.30.3-pandoc.7z",
+                                             "bytes":  23226707,
+                                             "sha256":  "b2a50d77cefa29877ea3c295a20a3e8c4da590041da4b90b7c7990819c2cd6f6"
+                                         }
+                                     ]
+                       },
+                       {
+                           "name":  "draw.io",
+                           "extractFrom":  "arhub-runtime-2026.07.30.3-draw.io.7z",
+                           "downloadBytes":  111936716,
+                           "parts":  [
+                                         {
+                                             "name":  "arhub-runtime-2026.07.30.3-draw.io.7z",
+                                             "bytes":  111936716,
+                                             "sha256":  "bec8b415a40237fdcf3afba9bdac31cb585b7da555c7fb2336a9e562ebca8f57"
+                                         }
+                                     ]
+                       },
+                       {
+                           "name":  "texlive",
+                           "extractFrom":  "arhub-runtime-2026.07.30.3-texlive.7z",
+                           "downloadBytes":  160334179,
+                           "parts":  [
+                                         {
+                                             "name":  "arhub-runtime-2026.07.30.3-texlive.7z",
+                                             "bytes":  160334179,
+                                             "sha256":  "8e84cb5e8df98be0af8c80c2bce338e48d42bf12e769d498ecb94629ebeacab1"
+                                         }
+                                     ]
+                       }
+                   ]
+}

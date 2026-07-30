@@ -1,0 +1,109 @@
+{
+  "schemaVersion": 1,
+  "runtimeVersion": "2026.07.30.3",
+  "architecture": "x64",
+  "minimumTotalBytes": 6400000000,
+  "forbiddenPaths": [
+    "python/Lib/site-packages/pip/_vendor/distlib/t64-arm.exe",
+    "python/Lib/site-packages/pip/_vendor/distlib/w64-arm.exe",
+    "python/Lib/site-packages/setuptools/cli-arm64.exe",
+    "python/Lib/site-packages/setuptools/gui-arm64.exe"
+  ],
+  "components": [
+    {
+      "name": "python",
+      "version": "3.11.9",
+      "minimumBytes": 4000000000,
+      "minimumFiles": 50000,
+      "versionProbe": {
+        "path": "python/python.exe",
+        "arguments": ["--version"],
+        "pattern": "Python 3\\.11\\.9"
+      },
+      "requiredFiles": [
+        { "path": "python/python.exe", "minimumBytes": 50000, "signature": "valid", "publisherContains": "Python Software Foundation" },
+        { "path": "python/python311.dll", "minimumBytes": 5000000 },
+        { "path": "python/python311.zip", "minimumBytes": 4000000 }
+      ]
+    },
+    {
+      "name": "node",
+      "version": "24.13.0",
+      "minimumBytes": 550000000,
+      "minimumFiles": 2000,
+      "versionProbe": {
+        "path": "node/node.exe",
+        "arguments": ["--version"],
+        "pattern": "v24\\.13\\.0"
+      },
+      "requiredFiles": [
+        { "path": "node/node.exe", "minimumBytes": 80000000, "signature": "valid", "publisherContains": "OpenJS Foundation" },
+        { "path": "node/node_modules/@anthropic-ai/claude-code/package.json", "minimumBytes": 100 }
+      ],
+      "packages": {
+        "@anthropic-ai/claude-code": "2.1.132",
+        "corepack": "0.34.5",
+        "npm": "11.6.2"
+      }
+    },
+    {
+      "name": "git",
+      "version": "2.52.0.windows.1",
+      "minimumBytes": 300000000,
+      "minimumFiles": 2000,
+      "versionProbe": {
+        "path": "git/cmd/git.exe",
+        "arguments": ["--version"],
+        "pattern": "git version 2\\.52\\.0\\.windows\\.1"
+      },
+      "requiredFiles": [
+        { "path": "git/cmd/git.exe", "minimumBytes": 40000, "signature": "valid", "publisherContains": "Johannes Schindelin" },
+        { "path": "git/bin/bash.exe", "minimumBytes": 40000 }
+      ]
+    },
+    {
+      "name": "pandoc",
+      "version": "3.7.0.2",
+      "minimumBytes": 210000000,
+      "minimumFiles": 3,
+      "versionProbe": {
+        "path": "pandoc/pandoc.exe",
+        "arguments": ["--version"],
+        "pattern": "3\\.7\\.0\\.2"
+      },
+      "requiredFiles": [
+        { "path": "pandoc/pandoc.exe", "minimumBytes": 200000000, "signature": "valid-or-unsigned" }
+      ]
+    },
+    {
+      "name": "draw.io",
+      "version": "28.2.5",
+      "minimumBytes": 380000000,
+      "minimumFiles": 70,
+      "requiredFiles": [
+        { "path": "draw.io/draw.io.exe", "minimumBytes": 190000000, "fileVersion": "28.2.5", "signature": "valid", "publisherContains": "JGraph Ltd" }
+      ]
+    },
+    {
+      "name": "texlive",
+      "version": "MiKTeX 25.12",
+      "minimumBytes": 950000000,
+      "minimumFiles": 18000,
+      "versionProbe": {
+        "path": "texlive/miktex/bin/x64/xelatex.exe",
+        "arguments": ["--version"],
+        "pattern": "MiKTeX 25\\.12"
+      },
+      "requiredFiles": [
+        { "path": "texlive/miktex/bin/x64/xelatex.exe", "minimumBytes": 1000000, "signature": "valid-or-unsigned" }
+      ]
+    }
+  ],
+  "forbiddenFileNames": [
+    ".env",
+    "credentials.json",
+    "secrets.json",
+    "api-key.txt",
+    "api_key.txt"
+  ]
+}

@@ -42,9 +42,11 @@ runtime/
 recovery-output/
 local-recovery-assets/
 .playwright-cli/
+.runtime/
 .runtime-*/
 .arhub-data/
 .venv/
+runtime-update-report.md
 assets/icon.html
 assets/icon-v2*
 assets/icon-v3*

@@ -1,0 +1,135 @@
+name: Scheduled Maintenance
+
+on:
+  schedule:
+    - cron: '41 2 * * 1'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+concurrency:
+  group: scheduled-maintenance
+  cancel-in-progress: false
+
+jobs:
+  dependencies:
+    runs-on: windows-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: '20'
+          cache: npm
+
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          npm ci
+          python -m pip install -r backend/requirements.txt
+          python -m pip install pip-audit
+
+      - name: Run security and regression checks
+        id: security
+        continue-on-error: true
+        shell: powershell
+        run: |
+          $failed = $false
+          npm audit --omit=dev --registry=https://registry.npmjs.org 2>&1 | Tee-Object -FilePath maintenance-security-report.txt
+          if ($LASTEXITCODE -ne 0) { $failed = $true }
+          python -m pip_audit -r backend/requirements.txt 2>&1 | Tee-Object -FilePath maintenance-security-report.txt -Append
+          if ($LASTEXITCODE -ne 0) { $failed = $true }
+          python -m pip_audit -r packaging/python-requirements.lock.txt --no-deps --disable-pip 2>&1 | Tee-Object -FilePath maintenance-security-report.txt -Append
+          if ($LASTEXITCODE -ne 0) { $failed = $true }
+          npm run check:js 2>&1 | Tee-Object -FilePath maintenance-security-report.txt -Append
+          if ($LASTEXITCODE -ne 0) { $failed = $true }
+          npm run check:python 2>&1 | Tee-Object -FilePath maintenance-security-report.txt -Append
+          if ($LASTEXITCODE -ne 0) { $failed = $true }
+          npm test 2>&1 | Tee-Object -FilePath maintenance-security-report.txt -Append
+          if ($LASTEXITCODE -ne 0) { $failed = $true }
+          npm run audit:open-source 2>&1 | Tee-Object -FilePath maintenance-security-report.txt -Append
+          if ($LASTEXITCODE -ne 0) { $failed = $true }
+          if ($failed) { throw 'One or more maintenance checks failed.' }
+
+      - name: Check locked runtime versions
+        id: runtime
+        continue-on-error: true
+        shell: powershell
+        run: |
+          powershell -NoProfile -ExecutionPolicy Bypass -File scripts/check-runtime-updates.ps1 2>&1 | Tee-Object -FilePath runtime-check-log.txt
+          if ($LASTEXITCODE -ne 0) { throw 'Runtime version check failed.' }
+
+      - name: Create or update runtime maintenance issue
+        if: steps.runtime.outcome == 'success' && steps.runtime.outputs.updates == 'true'
+        shell: powershell
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $title = 'Runtime dependency updates are available'
+          gh label create dependencies --color 0366d6 --description 'Dependency and runtime maintenance' --force
+          $number = gh issue list --state open --search "`"$title`" in:title" --json number --jq '.[0].number'
+          if ($number) {
+            gh issue comment $number --body-file runtime-update-report.md
+          } else {
+            gh issue create --title $title --label dependencies --body-file runtime-update-report.md
+          }
+
+      - name: Close resolved runtime maintenance issue
+        if: steps.runtime.outcome == 'success' && steps.runtime.outputs.updates != 'true'
+        shell: powershell
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $title = 'Runtime dependency updates are available'
+          $number = gh issue list --state open --search "`"$title`" in:title" --json number --jq '.[0].number'
+          if ($number) { gh issue close $number --comment 'The weekly runtime check no longer finds pending updates.' }
+
+      - name: Prepare failed-maintenance report
+        if: always() && (steps.security.outcome == 'failure' || steps.runtime.outcome == 'failure')
+        shell: powershell
+        run: |
+          $content = "# Scheduled maintenance failure`n`n"
+          foreach ($report in @('maintenance-security-report.txt', 'runtime-check-log.txt')) {
+            if (Test-Path -LiteralPath $report) {
+              $content += "## $report`n`n"
+              $content += [System.IO.File]::ReadAllText((Resolve-Path -LiteralPath $report))
+              $content += "`n`n"
+            }
+          }
+          if ($content.Length -gt 60000) { $content = $content.Substring(0, 60000) + "`n`n[report truncated]" }
+          [System.IO.File]::WriteAllText((Join-Path (Get-Location) 'maintenance-failure-report.md'), $content, (New-Object System.Text.UTF8Encoding($false)))
+
+      - name: Create or update failed-maintenance issue
+        if: always() && (steps.security.outcome == 'failure' || steps.runtime.outcome == 'failure')
+        shell: powershell
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $title = 'Scheduled maintenance checks are failing'
+          gh label create maintenance --color d73a4a --description 'Automated maintenance needs attention' --force
+          $number = gh issue list --state open --search "`"$title`" in:title" --json number --jq '.[0].number'
+          if ($number) {
+            gh issue comment $number --body-file maintenance-failure-report.md
+          } else {
+            gh issue create --title $title --label maintenance --body-file maintenance-failure-report.md
+          }
+
+      - name: Close resolved failed-maintenance issue
+        if: steps.security.outcome == 'success' && steps.runtime.outcome == 'success'
+        shell: powershell
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $title = 'Scheduled maintenance checks are failing'
+          $number = gh issue list --state open --search "`"$title`" in:title" --json number --jq '.[0].number'
+          if ($number) { gh issue close $number --comment 'All scheduled security and regression checks pass again.' }
+
+      - name: Fail when maintenance checks failed
+        if: steps.security.outcome == 'failure' || steps.runtime.outcome == 'failure'
+        run: exit 1

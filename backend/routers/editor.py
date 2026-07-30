@@ -380,7 +380,7 @@ def _pdf_pages(path: Path) -> int:
     if not path.is_file():
         return 0
     try:
-        from PyPDF2 import PdfReader
+        from pypdf import PdfReader
 
         return len(PdfReader(str(path)).pages)
     except Exception:

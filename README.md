@@ -1,6 +1,7 @@
 # ArHub
 
 [![Quality](https://github.com/jiashuoyan0-maker/ArHub/actions/workflows/quality.yml/badge.svg)](https://github.com/jiashuoyan0-maker/ArHub/actions/workflows/quality.yml)
+[![CodeQL](https://github.com/jiashuoyan0-maker/ArHub/actions/workflows/codeql.yml/badge.svg)](https://github.com/jiashuoyan0-maker/ArHub/actions/workflows/codeql.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
 <p align="center">
@@ -22,8 +23,8 @@ ArHub（AI Research Hub）是一个面向科研写作、数据分析和工程任
 > [!NOTE]
 > 本仓库由已安装应用的构建产物重建。后端、Agent、工作流、编辑器、状态层和
 > 文档导出链路已经重写为可审查源码并可从源码运行；前端保留可运行的
-> `dist/` 产物与恢复后的 `frontend-src/index.js`。原始 Vite 模块图和
-> Windows 打包工程仍未恢复，因此源码发布与安装包发布的成熟度不同。
+> `dist/` 产物与恢复后的 `frontend-src/index.js`。原始 Vite 模块图仍未恢复；
+> Windows 打包与发布链已经使用可审查配置重新建立。
 
 ## 界面预览
 
@@ -72,7 +73,7 @@ Agent 对话是主工作区。打开文档后，Markdown/LaTeX 编辑器会在�
 | DOCX 与提取 | 可运行源码 | Node 高保真引擎、python-docx fallback、PDF/DOCX 文本提取 |
 | 前端 | 恢复产物 | Codex 式动态工作台、亮暗主题；尚无可复现的模块化前端构建 |
 | Skills 与扩展 | 明文可审查 | Skill、模板和声明式 profile 不需要激活或解密 |
-| Windows 安装包 | 尚不可复现 | runtime、打包、代码签名和 SBOM 流程仍待建立 |
+| Windows 安装包 | 发布候选已验证 | 完整 runtime 锁、NSIS、签名范围隔离、SBOM、校验和、安装冒烟测试与 GitHub 发布工作流；正式产物必须使用可信证书 |
 
 ## 主要能力
 
@@ -137,9 +138,42 @@ npm run audit:open-source
 git diff --check
 ```
 
-当前回归集包含 30 个测试，覆盖模型 URL、LLM 请求、Agent 工具循环、工作流
+当前回归集包含 30 个 Python 测试和 9 个 Node 测试，覆盖模型 URL、LLM 请求、Agent 工具循环、工作流
 状态、编辑器安全边界、diff/apply/undo、DOCX 导出和提取队列。发布候选还经过
 真实浏览器验收，包括动态文件面板、Agent 工作区、亮色主题和 DOCX 预览。
+
+## Windows 完整版
+
+完整版安装包包含锁定的 Python、Node.js、Git、Pandoc、Draw.io 和 TeX
+运行环境，用户无需另行安装这些工具。运行时版本、文件统计、关键文件哈希和
+Python 包全集分别记录在 `packaging/runtime-manifest.json`、
+`packaging/runtime-lock.json` 与 `packaging/python-requirements.lock.txt`。
+
+`v1.0.9` 安装包约为 1.56 GiB，解压后的锁定运行时约为 6.52 GiB；建议安装前
+至少预留 10 GiB 可用空间。安装器需要展开约 8.7 万个文件，在机械硬盘或启用
+实时杀毒扫描的设备上可能连续数分钟不显示进度，请等待安装完成后再启动 ArHub。
+
+本地安装器验证使用：
+
+```powershell
+npm ci
+$env:ARHUB_RUNTIME_DIR = 'C:\path\to\verified\runtime'
+npm run runtime:check
+npm run package:win:unsigned
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts\smoke-test-installer.ps1 `
+  -InstallerPath release\ArHub-Setup-1.0.9-x64-unsigned.exe -AllowUnsigned
+```
+
+未签名命令只生成文件名带 `-unsigned` 的本地测试件，且自动更新保持禁用。
+正式 Release 默认强制可信 Authenticode 签名、时间戳、发布者匹配、SHA-256、
+CycloneDX SBOM 和 GitHub 构建来源证明。签名配置及发布步骤见
+[Windows 发布指南](docs/RELEASING.md)。
+
+正式构建只使用 ArHub 证书签署主程序、更新提权助手、安装器和卸载器；打包后的
+Python、Node.js、Git、Pandoc、Draw.io 与 MiKTeX 会再次按精确运行时锁验证，
+不会覆盖上游厂商签名。每周维护任务检查 npm、后端与完整捆绑 Python 环境的
+安全公告及完整运行时版本，Dependabot 负责 npm、pip 和 GitHub Actions 更新，
+CodeQL 定期扫描 JavaScript 与 Python 源码。
 
 ## 数据目录
 
@@ -167,11 +201,12 @@ git diff --check
 
 1. 原始前端模块和 Vite 配置未恢复，修改 UI 时必须同步
    `frontend-src/index.js` 与 `dist/`。
-2. 尚未建立可复现的 Electron runtime、安装包、SBOM 和代码签名流程，因此
-   当前只适合发布源码，不应发布声称可复现的二进制 Release。
+2. `dist/` 仍是恢复得到的前端生产产物；安装包可以从已提交产物和锁定 runtime
+   重建，但前端尚不能从模块化源码独立重建。
 3. 三个旧字节码 DOCX helper 的原始源码无法恢复，但当前 DOCX 导出已由新的
    Node/Python 实现替代，不再依赖这些字节码。
 4. provider-neutral 不等于 provider-identical；模型能力差异仍需按服务商验证。
+5. 在可信代码签名证书和干净 Windows 安装验收完成前，不发布正式二进制 Release。
 
 贡献前请阅读 [CONTRIBUTING.md](CONTRIBUTING.md)。安全问题请按
 [SECURITY.md](SECURITY.md) 处理。第三方许可见

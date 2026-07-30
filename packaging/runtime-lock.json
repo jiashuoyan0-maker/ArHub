@@ -1,0 +1,75 @@
+{
+    "schemaVersion":  1,
+    "runtimeVersion":  "2026.07.30.3",
+    "architecture":  "x64",
+    "manifestSha256":  "610827b797a48ce0e26a537101ef3b53d0e03e17a38b8dd5782d9b38d459aa6a",
+    "pythonRequirementsSha256":  "802c196f3c503e032798bda915d41727d326a0de9b4817616695238b0481d9d7",
+    "components":  {
+                       "python":  {
+                                      "files":  62330,
+                                      "bytes":  4352946649
+                                  },
+                       "node":  {
+                                    "files":  2186,
+                                    "bytes":  614616100
+                                },
+                       "git":  {
+                                   "files":  2255,
+                                   "bytes":  332224776
+                               },
+                       "pandoc":  {
+                                      "files":  3,
+                                      "bytes":  226274716
+                                  },
+                       "draw.io":  {
+                                       "files":  76,
+                                       "bytes":  418298465
+                                   },
+                       "texlive":  {
+                                       "files":  19818,
+                                       "bytes":  1059919198
+                                   }
+                   },
+    "probes":  {
+                   "python/python.exe":  {
+                                             "bytes":  103192,
+                                             "sha256":  "5f7b89a612c9b8af1d6456cdfcd1dbe5ca630849e79aebced9bee9a6694952ec"
+                                         },
+                   "python/python311.dll":  {
+                                                "bytes":  5800216,
+                                                "sha256":  "0817a2a657a24c0d5fbb60df56960f42fc66b3039d522ec952dab83e2d869364"
+                                            },
+                   "python/python311.zip":  {
+                                                "bytes":  4285636,
+                                                "sha256":  "7d0f59c930e7d3d9352399ea3c95c0272489b3c09a8e95faaedfa8a23e20e5b1"
+                                            },
+                   "node/node.exe":  {
+                                         "bytes":  89953280,
+                                         "sha256":  "d14ba95cdce1ef7dc9ad3ac74949ca5db38b27378ee30f30a23cf26f9e875a11"
+                                     },
+                   "node/node_modules/@anthropic-ai/claude-code/package.json":  {
+                                                                                    "bytes":  1476,
+                                                                                    "sha256":  "285e0a13c887007533dad78665f606535cf80da4d9002eafad6e30546e032d6c"
+                                                                                },
+                   "git/cmd/git.exe":  {
+                                           "bytes":  46480,
+                                           "sha256":  "3cbd024d9d11ef08bd6a0cb5a973613c50825b4952bc6006f3f4222f436091e5"
+                                       },
+                   "git/bin/bash.exe":  {
+                                            "bytes":  47008,
+                                            "sha256":  "c79fa1cd106bd3e2321f87e580930142ba9309d17b968fa5e3e71dedbbdc36aa"
+                                        },
+                   "pandoc/pandoc.exe":  {
+                                             "bytes":  226245632,
+                                             "sha256":  "805c46254def553373790ba158e5634cf714e9785a0e5cfadeadb03b60413248"
+                                         },
+                   "draw.io/draw.io.exe":  {
+                                               "bytes":  205684328,
+                                               "sha256":  "d34969d2cd3a076cd1bbfce69f3a7ce8b52ba90e6fcd0171b1b6e967b2a799ad"
+                                           },
+                   "texlive/miktex/bin/x64/xelatex.exe":  {
+                                                              "bytes":  1482752,
+                                                              "sha256":  "ef2397c0f8638ccb79a46a693be196e64ce90b361fde5cbcd7397a72e13e8ff4"
+                                                          }
+               }
+}

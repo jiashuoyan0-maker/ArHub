@@ -1,5 +1,6 @@
 {
-  "_comment": "自动更新已禁用；开源版本由用户自行选择更新来源。",
-  "server_url": "",
-  "check_interval_hours": 0
+  "enabled": true,
+  "check_interval_hours": 6,
+  "allow_prerelease": false,
+  "require_publisher_verification": true
 }

@@ -1,4 +1,4 @@
-﻿{
+{
   "name": "arhub",
   "productName": "ArHub",
   "version": "1.0.9",
@@ -26,15 +26,37 @@
     "glm"
   ],
   "scripts": {
+    "start": "electron .",
     "check:js": "node --check main.js && node --check preload.js && node --check updater.js && node --check dist/assets/arhub-workspace.js && node --check dist/assets/arhub-codex-shell.js",
-    "check:python": "python -X utf8 -m compileall -q backend tools tests",
-    "test": "python -X utf8 -m unittest discover -s tests -v",
-    "test:urls": "python -X utf8 -m unittest discover -s tests -v",
+    "check:python": "python -B -X utf8 scripts/check-python-syntax.py",
+    "test:node": "node --test tests-js/*.test.cjs",
+    "test:signing": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/test-signing-trust.ps1",
+    "test:python": "python -B -X utf8 -m unittest discover -s tests -v",
+    "test": "npm run test:node && npm run test:python && npm run test:signing",
+    "test:urls": "python -B -X utf8 -m unittest discover -s tests -v",
     "sync:frontend": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/sync-dist-brand.ps1",
     "sync:dist-brand": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/sync-dist-brand.ps1",
-    "audit:open-source": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/open-source-audit.ps1"
+    "audit:open-source": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/open-source-audit.ps1",
+    "runtime:check": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/assert-runtime.ps1 -EnforceLock",
+    "runtime:lock": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/export-runtime-lock.ps1",
+    "runtime:bundle": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/package-runtime.ps1 -UpdateRepositoryManifest",
+    "package:win": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/build-windows.ps1",
+    "package:win:unsigned": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/build-windows.ps1 -AllowUnsigned",
+    "release:verify": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/verify-release.ps1",
+    "release:smoke": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/smoke-test-installer.ps1"
   },
   "engines": {
     "node": ">=20"
+  },
+  "dependencies": {
+    "docx": "9.6.1",
+    "electron-updater": "6.8.9",
+    "fast-xml-parser": "5.7.3",
+    "temml": "0.13.2"
+  },
+  "devDependencies": {
+    "7zip-bin": "5.2.0",
+    "electron": "43.2.0",
+    "electron-builder": "26.15.3"
   }
 }

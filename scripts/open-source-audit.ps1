@@ -2,16 +2,19 @@
 param()
 
 $ErrorActionPreference = 'Stop'
-Push-Location (Join-Path $PSScriptRoot '..')
+$repoRoot = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path
+$safeDirectory = $repoRoot -replace '\\', '/'
+$gitOptions = @('-c', "safe.directory=$safeDirectory")
+Push-Location $repoRoot
 try {
-    $tracked = @(& git ls-files)
+    $tracked = @(& git @gitOptions ls-files)
     if ($LASTEXITCODE -ne 0) {
         throw 'git ls-files failed'
     }
 
     $candidateFiles = @($tracked)
     $candidateFiles += @(
-        & git ls-files --others --exclude-standard
+        & git @gitOptions ls-files --others --exclude-standard
     )
     $candidateFiles = @($candidateFiles | Sort-Object -Unique)
 
@@ -84,7 +87,7 @@ try {
         Get-Content -LiteralPath $path -Encoding UTF8 | ConvertFrom-Json | Out-Null
     }
 
-    & git diff --check
+    & git @gitOptions diff --check
     if ($LASTEXITCODE -ne 0) {
         throw 'git diff --check failed'
     }

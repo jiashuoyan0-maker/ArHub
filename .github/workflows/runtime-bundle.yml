@@ -1,0 +1,68 @@
+name: Runtime Bundle
+
+on:
+  workflow_dispatch:
+
+concurrency:
+  group: runtime-bundle
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+  id-token: write
+  attestations: write
+
+jobs:
+  bundle:
+    runs-on: [self-hosted, Windows, X64, arhub-runtime]
+    timeout-minutes: 360
+    env:
+      GH_TOKEN: ${{ github.token }}
+      ARHUB_RUNTIME_DIR: ${{ vars.ARHUB_RUNTIME_DIR }}
+
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: '20'
+          cache: npm
+
+      - name: Install packaging dependencies
+        run: npm ci
+
+      - name: Build locked runtime bundle
+        shell: powershell
+        run: |
+          if (-not $env:ARHUB_RUNTIME_DIR) { throw 'Repository variable ARHUB_RUNTIME_DIR is required on the runtime builder.' }
+          New-Item -ItemType Directory -Path runtime-output -Force | Out-Null
+          powershell -NoProfile -ExecutionPolicy Bypass -File scripts/package-runtime.ps1 -RuntimeDir $env:ARHUB_RUNTIME_DIR -OutputDir runtime-output
+
+      - name: Verify committed bundle manifest
+        shell: powershell
+        run: |
+          $expected = Get-Content packaging/runtime-bundle.json -Encoding utf8 | ConvertFrom-Json | ConvertTo-Json -Depth 10
+          $actual = Get-Content runtime-output/runtime-bundle.json -Encoding utf8 | ConvertFrom-Json | ConvertTo-Json -Depth 10
+          if ($expected -ne $actual) { throw 'runtime-bundle.json changed. Export and review the new lock before publishing.' }
+          powershell -NoProfile -ExecutionPolicy Bypass -File scripts/verify-runtime-bundle.ps1 -BundleDir runtime-output
+
+      - name: Attest runtime archives
+        uses: actions/attest-build-provenance@e8998f949152b193b063cb0ec769d69d929409be # v2
+        with:
+          subject-path: runtime-output/*
+
+      - name: Publish runtime release assets
+        shell: powershell
+        run: |
+          $manifest = Get-Content packaging/runtime-manifest.json -Encoding utf8 | ConvertFrom-Json
+          $tag = "runtime-v$($manifest.runtimeVersion)"
+          $existing = gh release view $tag --repo "${{ github.repository }}" --json isDraft,isPrerelease 2>$null
+          if ($LASTEXITCODE -eq 0) {
+            $release = $existing | ConvertFrom-Json
+            if (-not $release.isDraft) { throw "Runtime release $tag is already published and immutable." }
+          } else {
+            gh release create $tag --repo "${{ github.repository }}" --target "${{ github.sha }}" --title "ArHub Runtime $($manifest.runtimeVersion)" --notes "Locked Windows x64 runtime used by signed ArHub releases. This prerelease is an internal build input, not an application update." --draft --prerelease --latest=false
+          }
+          $assets = @(Get-ChildItem runtime-output -File | Select-Object -ExpandProperty FullName)
+          gh release upload $tag @assets --repo "${{ github.repository }}" --clobber
+          gh release edit $tag --repo "${{ github.repository }}" --draft=false --prerelease --latest=false
