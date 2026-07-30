@@ -82,6 +82,9 @@ test('runtime workflow verifies and reuses only the explicitly configured locked
   assert.match(packageRuntime, /Locked archive seed hash mismatch/);
   assert.match(packageRuntime, /Generated runtime bundle does not match the committed lock/);
   assert.match(packageRuntime, /Copy-Item -LiteralPath \$committedBundlePath -Destination \$bundlePath/);
+  assert.doesNotMatch(runtimeWorkflow, /gh release view/);
+  assert.match(runtimeWorkflow, /gh release list/);
+  assert.match(runtimeWorkflow, /\.tagName -ceq \$tag/);
 });
 
 test('Windows CI uses portable Node test discovery and avoids duplicate branch runs', () => {

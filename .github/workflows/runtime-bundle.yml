@@ -65,13 +65,17 @@ jobs:
         run: |
           $manifest = Get-Content packaging/runtime-manifest.json -Encoding utf8 | ConvertFrom-Json
           $tag = "runtime-v$($manifest.runtimeVersion)"
-          $existing = gh release view $tag --repo "${{ github.repository }}" --json isDraft,isPrerelease 2>$null
-          if ($LASTEXITCODE -eq 0) {
-            $release = $existing | ConvertFrom-Json
+          $releaseList = gh release list --repo "${{ github.repository }}" --limit 100 --json tagName,isDraft,isPrerelease
+          if ($LASTEXITCODE -ne 0) { throw 'Unable to list existing releases.' }
+          $release = @($releaseList | ConvertFrom-Json | Where-Object { $_.tagName -ceq $tag }) | Select-Object -First 1
+          if ($release) {
             if (-not $release.isDraft) { throw "Runtime release $tag is already published and immutable." }
           } else {
             gh release create $tag --repo "${{ github.repository }}" --target "${{ github.sha }}" --title "ArHub Runtime $($manifest.runtimeVersion)" --notes "Locked Windows x64 runtime used by ArHub releases. This prerelease is an internal build input, not an application update." --draft --prerelease --latest=false
+            if ($LASTEXITCODE -ne 0) { throw "Unable to create runtime release $tag." }
           }
           $assets = @(Get-ChildItem runtime-output -File | Select-Object -ExpandProperty FullName)
           gh release upload $tag @assets --repo "${{ github.repository }}" --clobber
+          if ($LASTEXITCODE -ne 0) { throw "Unable to upload runtime release assets for $tag." }
           gh release edit $tag --repo "${{ github.repository }}" --draft=false --prerelease --latest=false
+          if ($LASTEXITCODE -ne 0) { throw "Unable to publish runtime release $tag." }
