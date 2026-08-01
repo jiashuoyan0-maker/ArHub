@@ -1,0 +1,755 @@
+/*
+ * ArHub Studio editor layer
+ *
+ * This file is intentionally route-scoped and loaded after the existing Apple
+ * glass layer. It upgrades the editor without flattening the rest of ArHub.
+ */
+
+html.arhub-editor-studio-active {
+  --arhub-studio-topbar: 52px;
+  --arhub-studio-ink: #24242d;
+  --arhub-studio-muted: #696879;
+  --arhub-studio-line: rgba(72, 63, 108, 0.14);
+  --arhub-studio-hairline: rgba(255, 255, 255, 0.78);
+  --arhub-studio-panel: rgba(255, 255, 255, 0.7);
+  --arhub-studio-panel-strong: rgba(255, 255, 255, 0.88);
+  --arhub-studio-thread: rgba(250, 249, 255, 0.45);
+  --arhub-studio-reading: rgba(255, 255, 255, 0.92);
+  --arhub-studio-chip: rgba(95, 78, 172, 0.1);
+  --arhub-studio-accent: #7665e8;
+  --arhub-studio-accent-soft: rgba(118, 101, 232, 0.15);
+  --arhub-studio-shadow: 0 22px 60px rgba(38, 27, 72, 0.12),
+    0 2px 8px rgba(21, 18, 38, 0.06), inset 0 1px 0 var(--arhub-studio-hairline);
+  --arhub-studio-ease: cubic-bezier(0.22, 1, 0.36, 1);
+  color: var(--arhub-studio-ink);
+}
+
+html.arhub-editor-studio-active:is([data-theme="dark"], .dark) {
+  --arhub-studio-ink: #f4f2fb;
+  --arhub-studio-muted: #aaa6ba;
+  --arhub-studio-line: rgba(224, 216, 255, 0.11);
+  --arhub-studio-hairline: rgba(255, 255, 255, 0.1);
+  --arhub-studio-panel: rgba(20, 17, 31, 0.67);
+  --arhub-studio-panel-strong: rgba(17, 15, 26, 0.84);
+  --arhub-studio-thread: rgba(15, 13, 23, 0.54);
+  --arhub-studio-reading: rgba(18, 16, 27, 0.94);
+  --arhub-studio-chip: rgba(157, 136, 255, 0.14);
+  --arhub-studio-accent: #ad9bff;
+  --arhub-studio-accent-soft: rgba(173, 155, 255, 0.16);
+  --arhub-studio-shadow: 0 28px 70px rgba(0, 0, 0, 0.42),
+    0 2px 10px rgba(0, 0, 0, 0.2), inset 0 1px 0 var(--arhub-studio-hairline);
+}
+
+html.arhub-editor-studio-active,
+html.arhub-editor-studio-active body {
+  min-height: 100%;
+  color: var(--arhub-studio-ink) !important;
+  font-family: "SF Pro Display", "SF Pro Text", "PingFang SC", "Microsoft YaHei UI",
+    "Segoe UI Variable Text", "Segoe UI", sans-serif !important;
+  background:
+    radial-gradient(760px 540px at 38% -16%, rgba(119, 87, 241, 0.4), transparent 67%),
+    radial-gradient(660px 520px at 106% 15%, rgba(75, 157, 255, 0.18), transparent 68%),
+    radial-gradient(760px 590px at 16% 111%, rgba(220, 94, 194, 0.11), transparent 70%),
+    linear-gradient(137deg, #f4f2ff 0%, #faf9ff 42%, #edf5ff 100%) !important;
+  background-attachment: fixed !important;
+}
+
+html.arhub-editor-studio-active:is([data-theme="dark"], .dark),
+html.arhub-editor-studio-active:is([data-theme="dark"], .dark) body {
+  background:
+    radial-gradient(870px 600px at 38% -19%, rgba(104, 57, 238, 0.63), transparent 66%),
+    radial-gradient(650px 510px at 102% 10%, rgba(31, 82, 203, 0.34), transparent 68%),
+    radial-gradient(720px 600px at 12% 113%, rgba(162, 42, 177, 0.18), transparent 73%),
+    linear-gradient(138deg, #09070f 0%, #100d1c 44%, #0d1223 100%) !important;
+}
+
+html.arhub-editor-studio-active #root {
+  min-height: 100dvh !important;
+  margin-left: 0 !important;
+  padding-top: var(--arhub-studio-topbar) !important;
+}
+
+html.arhub-editor-studio-active #root > div,
+html.arhub-editor-studio-active .bg-grid {
+  min-height: calc(100dvh - var(--arhub-studio-topbar)) !important;
+  background: transparent !important;
+  background-image: none !important;
+}
+
+/* Editor is a destination, not a page that permanently carries the task rail. */
+html.arhub-editor-studio-active #mw-codex-sidebar {
+  display: none !important;
+}
+
+html.arhub-editor-studio-active #mw-codex-topbar,
+html.arhub-editor-studio-active body.mw-shell-collapsed #mw-codex-topbar {
+  left: 0 !important;
+  height: var(--arhub-studio-topbar) !important;
+  padding: 0 14px !important;
+  color: var(--arhub-studio-ink) !important;
+  border-bottom: 1px solid var(--arhub-studio-line) !important;
+  background: color-mix(in srgb, var(--arhub-studio-panel) 84%, transparent) !important;
+  box-shadow: inset 0 -1px 0 var(--arhub-studio-hairline), 0 10px 30px rgba(23, 16, 46, 0.09) !important;
+  backdrop-filter: blur(30px) saturate(150%) !important;
+  -webkit-backdrop-filter: blur(30px) saturate(150%) !important;
+}
+
+html.arhub-editor-studio-active #mw-codex-topbar::after {
+  right: 22%;
+  left: 22%;
+  height: 1px;
+  opacity: 0.48;
+}
+
+html.arhub-editor-studio-active .mw-shell-topbar-left {
+  gap: 10px;
+}
+
+html.arhub-editor-studio-active .mw-shell-route-title > span {
+  display: none;
+}
+
+html.arhub-editor-studio-active .mw-shell-route-title {
+  display: block;
+}
+
+html.arhub-editor-studio-active .mw-shell-route-title > strong {
+  max-width: min(54vw, 720px);
+  color: var(--arhub-studio-ink) !important;
+  font-size: 13px !important;
+  font-weight: 650 !important;
+  letter-spacing: -0.012em;
+}
+
+.arhub-studio-back,
+.arhub-studio-files-trigger {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 32px;
+  margin: 0;
+  padding: 0 9px;
+  color: var(--arhub-studio-muted);
+  border: 1px solid transparent;
+  border-radius: 10px;
+  background: transparent;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 610;
+  line-height: 1;
+  text-decoration: none;
+  cursor: pointer;
+  transition: color 180ms var(--arhub-studio-ease), background-color 180ms var(--arhub-studio-ease),
+    border-color 180ms var(--arhub-studio-ease), transform 150ms var(--arhub-studio-ease);
+}
+
+.arhub-studio-back:hover,
+.arhub-studio-files-trigger:hover,
+.arhub-studio-files-trigger[aria-pressed="true"] {
+  color: var(--arhub-studio-ink);
+  border-color: var(--arhub-studio-line);
+  background: color-mix(in srgb, var(--arhub-studio-panel-strong) 80%, transparent);
+}
+
+.arhub-studio-back:active,
+.arhub-studio-files-trigger:active {
+  transform: scale(0.97);
+}
+
+.arhub-studio-back:focus-visible,
+.arhub-studio-files-trigger:focus-visible {
+  outline: 3px solid color-mix(in srgb, var(--arhub-studio-accent) 34%, transparent);
+  outline-offset: 2px;
+}
+
+.arhub-studio-back svg,
+.arhub-studio-files-trigger svg {
+  width: 15px;
+  height: 15px;
+}
+
+html.arhub-editor-studio-active main.max-w-7xl {
+  width: 100% !important;
+  max-width: none !important;
+  height: calc(100dvh - var(--arhub-studio-topbar)) !important;
+  min-height: 0 !important;
+  margin: 0 !important;
+  padding: 8px 10px 10px !important;
+  overflow: hidden !important;
+}
+
+html.arhub-editor-studio-active .mw-editor-shell,
+html.arhub-editor-studio-active.mw-editor-active .mw-editor-shell[data-mw-layout] {
+  position: relative !important;
+  display: grid !important;
+  width: 100% !important;
+  height: 100% !important;
+  min-height: 0 !important;
+  grid-template-columns: minmax(0, 1fr) !important;
+  grid-template-rows: minmax(0, 1fr) !important;
+  grid-template-areas: "agent" !important;
+  gap: 10px !important;
+  overflow: hidden !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  transition: grid-template-columns 240ms var(--arhub-studio-ease), gap 240ms var(--arhub-studio-ease) !important;
+}
+
+/* Navigation is intentionally on demand. */
+html.arhub-editor-studio-active.mw-editor-active .mw-editor-shell[data-mw-layout][data-arhub-codex-files="collapsed"][data-arhub-codex-context="closed"] {
+  grid-template-columns: minmax(0, 1fr) !important;
+  grid-template-areas: "agent" !important;
+}
+
+html.arhub-editor-studio-active.mw-editor-active .mw-editor-shell[data-mw-layout][data-arhub-codex-files="expanded"][data-arhub-codex-context="closed"] {
+  grid-template-columns: minmax(222px, 258px) minmax(0, 1fr) !important;
+  grid-template-areas: "files agent" !important;
+}
+
+html.arhub-editor-studio-active.mw-editor-active .mw-editor-shell[data-mw-layout][data-arhub-codex-files="collapsed"][data-arhub-codex-context="open"],
+html.arhub-editor-studio-active.mw-editor-active .mw-editor-shell[data-mw-layout][data-arhub-codex-files="expanded"][data-arhub-codex-context="open"] {
+  grid-template-columns: minmax(0, 1.22fr) minmax(390px, 0.78fr) !important;
+  grid-template-areas: "agent context" !important;
+}
+
+html.arhub-editor-studio-active.mw-editor-active .mw-editor-shell[data-mw-layout][data-arhub-codex-focus="true"] {
+  grid-template-columns: minmax(0, 1fr) !important;
+  grid-template-areas: "agent" !important;
+}
+
+html.arhub-editor-studio-active.mw-editor-active .mw-editor-shell[data-mw-layout] .mw-agent-panel,
+html.arhub-editor-studio-active.mw-editor-active .mw-editor-shell[data-mw-layout] .mw-files-panel,
+html.arhub-editor-studio-active.mw-editor-active .mw-editor-shell[data-mw-layout] .mw-workbench {
+  min-width: 0 !important;
+  min-height: 0 !important;
+  border: 1px solid var(--arhub-studio-line) !important;
+  border-radius: 20px !important;
+  box-shadow: var(--arhub-studio-shadow) !important;
+  backdrop-filter: blur(28px) saturate(145%) !important;
+  -webkit-backdrop-filter: blur(28px) saturate(145%) !important;
+}
+
+html.arhub-editor-studio-active.mw-editor-active .mw-editor-shell[data-mw-layout] .mw-agent-panel {
+  display: flex !important;
+  grid-area: agent !important;
+  width: auto !important;
+  overflow: hidden !important;
+  border-color: color-mix(in srgb, var(--arhub-studio-line) 86%, var(--arhub-studio-accent) 14%) !important;
+  background: var(--arhub-studio-panel) !important;
+}
+
+html.arhub-editor-studio-active.mw-editor-active .mw-agent-panel::after {
+  height: 1px;
+  opacity: 0.72;
+  background: linear-gradient(90deg, #7c6cff, #5bb9ff 52%, #ef78c5) !important;
+}
+
+html.arhub-editor-studio-active.mw-editor-active .mw-editor-shell[data-mw-layout] .mw-files-panel {
+  display: none !important;
+  grid-area: files !important;
+  padding: 12px !important;
+  overflow: hidden auto !important;
+  color: var(--arhub-studio-ink) !important;
+  background: color-mix(in srgb, var(--arhub-studio-panel) 90%, transparent) !important;
+}
+
+html.arhub-editor-studio-active.mw-editor-active .mw-editor-shell[data-mw-layout][data-arhub-codex-files="expanded"][data-arhub-codex-context="closed"] .mw-files-panel {
+  display: block !important;
+  animation: arhub-studio-file-in 220ms var(--arhub-studio-ease) both;
+}
+
+html.arhub-editor-studio-active.mw-editor-active .mw-editor-shell[data-mw-layout] .mw-files-panel::before,
+html.arhub-editor-studio-active.mw-editor-active .mw-editor-shell[data-mw-layout] .arhub-codex-file-launcher {
+  display: none !important;
+  content: none !important;
+}
+
+html.arhub-editor-studio-active.mw-editor-active .mw-files-panel button,
+html.arhub-editor-studio-active.mw-editor-active .mw-files-panel a {
+  min-height: 32px;
+  color: var(--arhub-studio-muted) !important;
+  border-radius: 10px !important;
+  transition: color 150ms ease, background-color 150ms ease, transform 150ms var(--arhub-studio-ease) !important;
+}
+
+html.arhub-editor-studio-active.mw-editor-active .mw-files-panel button:hover,
+html.arhub-editor-studio-active.mw-editor-active .mw-files-panel a:hover,
+html.arhub-editor-studio-active.mw-editor-active .mw-files-panel [aria-current="true"] {
+  color: var(--arhub-studio-ink) !important;
+  background: var(--arhub-studio-accent-soft) !important;
+}
+
+html.arhub-editor-studio-active.mw-editor-active .arhub-codex-file-icon {
+  width: 24px;
+  height: 24px;
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--arhub-studio-accent-soft) 82%, transparent);
+}
+
+html.arhub-editor-studio-active.mw-editor-active .mw-editor-shell[data-mw-layout] .mw-workbench {
+  display: none !important;
+  grid-area: context !important;
+  flex-direction: column !important;
+  overflow: hidden !important;
+  background: var(--arhub-studio-reading) !important;
+  transform: translateX(18px);
+  transition: opacity 210ms var(--arhub-studio-ease), transform 240ms var(--arhub-studio-ease) !important;
+}
+
+html.arhub-editor-studio-active.mw-editor-active .mw-editor-shell[data-mw-layout][data-arhub-codex-context="open"] .mw-workbench {
+  display: flex !important;
+  opacity: 1 !important;
+  pointer-events: auto !important;
+  transform: translateX(0);
+  animation: arhub-studio-preview-in 240ms var(--arhub-studio-ease) both;
+}
+
+html.arhub-editor-studio-active.mw-editor-active .mw-agent-header {
+  min-height: 58px !important;
+  padding: 10px 14px !important;
+  gap: 10px !important;
+  color: var(--arhub-studio-ink) !important;
+  border-color: var(--arhub-studio-line) !important;
+  background: color-mix(in srgb, var(--arhub-studio-panel-strong) 82%, transparent) !important;
+  backdrop-filter: blur(26px) saturate(140%) !important;
+  -webkit-backdrop-filter: blur(26px) saturate(140%) !important;
+}
+
+html.arhub-editor-studio-active.mw-editor-active .mw-agent-title {
+  color: var(--arhub-studio-ink) !important;
+  font-size: 15px !important;
+  font-weight: 690 !important;
+  letter-spacing: -0.018em !important;
+}
+
+html.arhub-editor-studio-active.mw-editor-active .mw-agent-meta,
+html.arhub-editor-studio-active.mw-editor-active .mw-agent-header small {
+  color: var(--arhub-studio-muted) !important;
+  font-size: 12px !important;
+}
+
+html.arhub-editor-studio-active.mw-editor-active .mw-agent-header select,
+html.arhub-editor-studio-active.mw-editor-active .mw-agent-header button:not(.arhub-studio-files-trigger) {
+  border-color: color-mix(in srgb, var(--arhub-studio-line) 82%, transparent) !important;
+  background: color-mix(in srgb, var(--arhub-studio-panel-strong) 70%, transparent) !important;
+}
+
+html.arhub-editor-studio-active.mw-editor-active .arhub-studio-icon-control {
+  display: inline-flex !important;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  color: var(--arhub-studio-muted) !important;
+  font-size: 11px !important;
+  font-weight: 620 !important;
+}
+
+html.arhub-editor-studio-active.mw-editor-active .arhub-studio-icon-control > svg {
+  flex: 0 0 auto;
+  stroke-width: 1.75;
+}
+
+html.arhub-editor-studio-active.mw-editor-active .arhub-studio-icon-control.is-icon-only {
+  width: 32px;
+  min-width: 32px !important;
+  height: 32px;
+  min-height: 32px !important;
+  padding: 0 !important;
+  border-radius: 10px !important;
+}
+
+html.arhub-editor-studio-active.mw-editor-active .mw-composer-row .arhub-studio-icon-control:not(.is-icon-only) {
+  min-width: auto !important;
+  padding-inline: 10px !important;
+}
+
+html.arhub-editor-studio-active.mw-editor-active .arhub-studio-icon-control:hover {
+  color: var(--arhub-studio-ink) !important;
+  border-color: color-mix(in srgb, var(--arhub-studio-accent) 30%, var(--arhub-studio-line)) !important;
+}
+
+html.arhub-editor-studio-active .arhub-codex-agent-toolbar {
+  display: none !important;
+}
+
+html.arhub-editor-studio-active.mw-editor-active .mw-agent-thread {
+  min-height: 0;
+  padding: 24px clamp(22px, 4vw, 68px) 30px !important;
+  color: var(--arhub-studio-ink) !important;
+  background:
+    linear-gradient(135deg, color-mix(in srgb, var(--arhub-studio-thread) 92%, transparent), transparent 62%),
+    radial-gradient(480px 260px at 52% 0%, color-mix(in srgb, var(--arhub-studio-accent-soft) 68%, transparent), transparent 76%) !important;
+}
+
+html.arhub-editor-studio-active.mw-editor-active .mw-agent-thread > .mw-message {
+  width: min(100%, 860px) !important;
+  margin: 0 auto 18px !important;
+  color: var(--arhub-studio-ink) !important;
+  font-size: 14px !important;
+  line-height: 1.72 !important;
+}
+
+html.arhub-editor-studio-active.mw-editor-active .mw-agent-thread > .mw-message[data-role="assistant"] {
+  padding-left: 18px !important;
+  border-left-color: var(--arhub-studio-accent) !important;
+}
+
+html.arhub-editor-studio-active.mw-editor-active .mw-agent-thread > .mw-message[data-role="user"] {
+  width: fit-content !important;
+  max-width: min(100%, 720px) !important;
+  margin-right: max(0px, calc((100% - 860px) / 2)) !important;
+  margin-left: auto !important;
+  padding: 12px 15px !important;
+  border: 1px solid color-mix(in srgb, var(--arhub-studio-accent) 22%, var(--arhub-studio-line)) !important;
+  border-radius: 16px !important;
+  background: color-mix(in srgb, var(--arhub-studio-accent-soft) 78%, var(--arhub-studio-panel-strong)) !important;
+  box-shadow: inset 0 1px 0 var(--arhub-studio-hairline) !important;
+}
+
+html.arhub-editor-studio-active.mw-editor-active .mw-agent-empty {
+  width: min(100%, 760px) !important;
+  margin: 12px auto 0 !important;
+  padding: 0 !important;
+  gap: 9px !important;
+  background: transparent !important;
+}
+
+html.arhub-editor-studio-active.mw-editor-active .mw-agent-empty > p:first-child {
+  margin: 0 0 3px !important;
+  padding: 7px 4px !important;
+  color: var(--arhub-studio-ink) !important;
+  background: transparent !important;
+  font-size: 15px !important;
+  font-weight: 690 !important;
+  letter-spacing: -0.014em;
+}
+
+html.arhub-editor-studio-active.mw-editor-active .mw-agent-empty > p:not(:first-child) {
+  display: flex;
+  align-items: center;
+  min-height: 52px !important;
+  margin: 0 !important;
+  padding: 12px 13px !important;
+  color: var(--arhub-studio-muted) !important;
+  border: 1px solid var(--arhub-studio-line) !important;
+  border-radius: 14px !important;
+  background: color-mix(in srgb, var(--arhub-studio-panel-strong) 64%, transparent) !important;
+  box-shadow: inset 0 1px 0 var(--arhub-studio-hairline) !important;
+  transition: color 170ms ease, background-color 170ms ease, border-color 170ms ease, transform 170ms var(--arhub-studio-ease) !important;
+}
+
+html.arhub-editor-studio-active.mw-editor-active .mw-agent-empty > p:not(:first-child)::before {
+  width: 7px;
+  height: 7px;
+  margin-right: 10px;
+  border-radius: 50%;
+  background: var(--arhub-studio-accent);
+  box-shadow: 0 0 0 4px var(--arhub-studio-accent-soft);
+  content: "";
+}
+
+html.arhub-editor-studio-active.mw-editor-active .mw-agent-empty > p:not(:first-child):hover {
+  color: var(--arhub-studio-ink) !important;
+  border-color: color-mix(in srgb, var(--arhub-studio-accent) 33%, var(--arhub-studio-line)) !important;
+  background: color-mix(in srgb, var(--arhub-studio-accent-soft) 55%, var(--arhub-studio-panel-strong)) !important;
+  transform: translateY(-1px);
+}
+
+html.arhub-editor-studio-active.mw-editor-active .mw-agent-composer {
+  padding: 13px clamp(14px, 3.1vw, 38px) 16px !important;
+  border-color: var(--arhub-studio-line) !important;
+  background: color-mix(in srgb, var(--arhub-studio-panel-strong) 89%, transparent) !important;
+  backdrop-filter: blur(28px) saturate(145%) !important;
+  -webkit-backdrop-filter: blur(28px) saturate(145%) !important;
+}
+
+html.arhub-editor-studio-active.mw-editor-active .mw-context-strip,
+html.arhub-editor-studio-active.mw-editor-active .mw-composer-row {
+  width: min(100%, 900px) !important;
+}
+
+html.arhub-editor-studio-active.mw-editor-active .mw-composer-row {
+  min-height: 58px;
+  padding: 5px 6px 5px 14px !important;
+  border: 1px solid color-mix(in srgb, var(--arhub-studio-line) 84%, var(--arhub-studio-accent) 16%) !important;
+  border-radius: 18px !important;
+  background: color-mix(in srgb, var(--arhub-studio-panel-strong) 93%, transparent) !important;
+  box-shadow: 0 9px 28px rgba(24, 18, 52, 0.1), inset 0 1px 0 var(--arhub-studio-hairline) !important;
+}
+
+html.arhub-editor-studio-active.mw-editor-active .mw-agent-input {
+  color: var(--arhub-studio-ink) !important;
+  font-size: 14px !important;
+}
+
+html.arhub-editor-studio-active.mw-editor-active .mw-composer-row > button {
+  min-width: 42px !important;
+  min-height: 42px !important;
+  border-radius: 13px !important;
+}
+
+html.arhub-editor-studio-active.mw-editor-active .mw-workbench > .card {
+  flex: 1 1 auto;
+  min-height: 0;
+  border: 0 !important;
+  border-radius: 0 0 20px 20px !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+html.arhub-editor-studio-active.mw-editor-active .mw-workbench .mw-editor-surface,
+html.arhub-editor-studio-active.mw-editor-active .mw-workbench .mw-preview-surface {
+  color: var(--arhub-studio-ink) !important;
+  background: color-mix(in srgb, var(--arhub-studio-reading) 96%, transparent) !important;
+}
+
+html.arhub-editor-studio-active .arhub-codex-context-bar {
+  min-height: 58px;
+  padding: 8px 10px 8px 14px;
+  color: var(--arhub-studio-ink);
+  border-bottom-color: var(--arhub-studio-line);
+  background: color-mix(in srgb, var(--arhub-studio-panel-strong) 90%, transparent);
+}
+
+html.arhub-editor-studio-active .arhub-codex-context-icon {
+  width: 30px;
+  height: 30px;
+  color: var(--arhub-studio-accent);
+  border: 1px solid color-mix(in srgb, var(--arhub-studio-accent) 18%, transparent);
+  border-radius: 10px;
+  background: var(--arhub-studio-accent-soft);
+}
+
+html.arhub-editor-studio-active .arhub-codex-context-title,
+html.arhub-editor-studio-active .arhub-codex-context-name {
+  color: var(--arhub-studio-ink);
+}
+
+html.arhub-editor-studio-active .arhub-codex-context-close {
+  color: var(--arhub-studio-muted);
+}
+
+@keyframes arhub-studio-file-in {
+  from { opacity: 0; transform: translateX(-10px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+
+@keyframes arhub-studio-preview-in {
+  from { opacity: 0; transform: translateX(20px) scale(0.988); }
+  to { opacity: 1; transform: translateX(0) scale(1); }
+}
+
+@media (max-width: 1220px) {
+  html.arhub-editor-studio-active.mw-editor-active .mw-editor-shell[data-mw-layout][data-arhub-codex-files="collapsed"][data-arhub-codex-context="open"],
+  html.arhub-editor-studio-active.mw-editor-active .mw-editor-shell[data-mw-layout][data-arhub-codex-files="expanded"][data-arhub-codex-context="open"] {
+    grid-template-columns: minmax(0, 1.06fr) minmax(350px, 0.94fr) !important;
+  }
+
+  html.arhub-editor-studio-active.mw-editor-active .mw-agent-thread {
+    padding-inline: clamp(18px, 3vw, 42px) !important;
+  }
+}
+
+@media (max-width: 960px) {
+  html.arhub-editor-studio-active main.max-w-7xl {
+    padding: 6px !important;
+  }
+
+  html.arhub-editor-studio-active.mw-editor-active .mw-editor-shell[data-mw-layout],
+  html.arhub-editor-studio-active.mw-editor-active .mw-editor-shell[data-mw-layout][data-arhub-codex-files="expanded"][data-arhub-codex-context="closed"],
+  html.arhub-editor-studio-active.mw-editor-active .mw-editor-shell[data-mw-layout][data-arhub-codex-files="collapsed"][data-arhub-codex-context="open"],
+  html.arhub-editor-studio-active.mw-editor-active .mw-editor-shell[data-mw-layout][data-arhub-codex-files="expanded"][data-arhub-codex-context="open"] {
+    grid-template-columns: minmax(0, 1fr) !important;
+    grid-template-areas: "agent" !important;
+  }
+
+  html.arhub-editor-studio-active.mw-editor-active .mw-editor-shell[data-mw-layout][data-arhub-codex-files="expanded"][data-arhub-codex-context="closed"] .mw-files-panel,
+  html.arhub-editor-studio-active.mw-editor-active .mw-editor-shell[data-mw-layout][data-arhub-codex-context="open"] .mw-workbench {
+    position: absolute !important;
+    z-index: 35;
+    top: 0;
+    bottom: 0;
+    display: flex !important;
+    width: min(520px, calc(100% - 12px));
+    border-radius: 18px !important;
+  }
+
+  html.arhub-editor-studio-active.mw-editor-active .mw-editor-shell[data-mw-layout][data-arhub-codex-files="expanded"][data-arhub-codex-context="closed"] .mw-files-panel {
+    left: 0;
+    display: block !important;
+  }
+
+  html.arhub-editor-studio-active.mw-editor-active .mw-editor-shell[data-mw-layout][data-arhub-codex-context="open"] .mw-workbench {
+    right: 0;
+  }
+}
+
+@media (max-width: 620px) {
+  html.arhub-editor-studio-active {
+    --arhub-studio-topbar: 48px;
+  }
+
+  html.arhub-editor-studio-active #mw-codex-topbar {
+    padding-inline: 8px !important;
+  }
+
+  html.arhub-editor-studio-active .arhub-studio-back > span,
+  html.arhub-editor-studio-active .arhub-studio-files-trigger > span,
+  html.arhub-editor-studio-active .mw-shell-local-status {
+    display: none;
+  }
+
+  html.arhub-editor-studio-active .arhub-studio-back,
+  html.arhub-editor-studio-active .arhub-studio-files-trigger {
+    width: 32px;
+    padding: 0;
+  }
+
+  html.arhub-editor-studio-active .mw-shell-route-title > strong {
+    max-width: 52vw;
+  }
+
+  html.arhub-editor-studio-active.mw-editor-active .mw-agent-header {
+    min-height: 54px !important;
+    padding: 7px 9px !important;
+  }
+
+  html.arhub-editor-studio-active.mw-editor-active .mw-agent-thread {
+    padding: 16px 14px 20px !important;
+  }
+
+  html.arhub-editor-studio-active.mw-editor-active .mw-agent-composer {
+    padding: 9px 10px 11px !important;
+  }
+
+  html.arhub-editor-studio-active.mw-editor-active .mw-editor-shell[data-mw-layout][data-arhub-codex-files="expanded"][data-arhub-codex-context="closed"] .mw-files-panel,
+  html.arhub-editor-studio-active.mw-editor-active .mw-editor-shell[data-mw-layout][data-arhub-codex-context="open"] .mw-workbench {
+    width: 100%;
+    border-radius: 14px !important;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html.arhub-editor-studio-active .mw-editor-shell,
+  html.arhub-editor-studio-active .mw-files-panel,
+  html.arhub-editor-studio-active .mw-workbench,
+  html.arhub-editor-studio-active .mw-agent-empty > p:not(:first-child),
+  .arhub-studio-back,
+  .arhub-studio-files-trigger {
+    animation: none !important;
+    transition: none !important;
+  }
+}
+
+@supports not (backdrop-filter: blur(1px)) {
+  html.arhub-editor-studio-active.mw-editor-active .mw-agent-panel,
+  html.arhub-editor-studio-active.mw-editor-active .mw-files-panel,
+  html.arhub-editor-studio-active.mw-editor-active .mw-workbench,
+  html.arhub-editor-studio-active #mw-codex-topbar {
+    background: var(--arhub-studio-panel-strong) !important;
+  }
+}
+
+/* The React mode switch re-renders these controls.  Lock their geometry so a
+ * mode change cannot turn the horizontal segmented control into stacked tiles. */
+html.arhub-editor-studio-active.mw-editor-active .mw-agent-header .mw-agent-segmented {
+  box-sizing: border-box;
+  display: inline-flex !important;
+  flex: 0 0 auto !important;
+  align-items: center !important;
+  gap: 1px !important;
+  min-height: 32px;
+  margin-bottom: 0 !important;
+  padding: 2px !important;
+  border: 1px solid color-mix(in srgb, var(--arhub-studio-line) 88%, transparent) !important;
+  border-radius: 9px !important;
+  background: color-mix(in srgb, var(--arhub-studio-panel-strong) 72%, transparent) !important;
+  box-shadow: inset 0 1px var(--arhub-studio-hairline) !important;
+}
+
+html.arhub-editor-studio-active.mw-editor-active .mw-agent-header .mw-agent-segmented > button,
+html.arhub-editor-studio-active.mw-editor-active .mw-agent-header .mw-agent-segmented > button.arhub-studio-icon-control {
+  box-sizing: border-box;
+  display: inline-flex !important;
+  flex: 0 0 auto !important;
+  align-items: center !important;
+  justify-content: center !important;
+  gap: 5px !important;
+  min-width: 84px !important;
+  min-height: 28px !important;
+  height: 28px !important;
+  margin: 0 !important;
+  padding: 0 9px !important;
+  border: 1px solid transparent !important;
+  border-radius: 7px !important;
+  color: var(--arhub-studio-muted) !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  line-height: 1 !important;
+  white-space: nowrap !important;
+  transform: none !important;
+}
+
+html.arhub-editor-studio-active.mw-editor-active .mw-agent-header .mw-agent-segmented > button[class~="font-medium"] {
+  color: var(--arhub-studio-accent) !important;
+  border-color: color-mix(in srgb, var(--arhub-studio-accent) 28%, var(--arhub-studio-line)) !important;
+  background: color-mix(in srgb, var(--arhub-studio-accent-soft) 72%, var(--arhub-studio-panel-strong)) !important;
+  box-shadow: inset 0 1px var(--arhub-studio-hairline) !important;
+}
+
+html.arhub-editor-studio-active.mw-editor-active .mw-agent-header .mw-agent-segmented > button > svg {
+  flex: 0 0 auto;
+  stroke-width: 1.75;
+}
+
+html.arhub-editor-studio-active.mw-editor-active .mw-agent-header .mw-agent-segmented > button:active {
+  transform: none !important;
+}
+
+html.arhub-editor-studio-active.mw-editor-active .mw-agent-header .mw-agent-segmented > button:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--arhub-studio-accent) 58%, transparent) !important;
+  outline-offset: 1px !important;
+}
+
+@media (max-width: 620px) {
+  html.arhub-editor-studio-active.mw-editor-active .mw-agent-header .mw-agent-segmented > button,
+  html.arhub-editor-studio-active.mw-editor-active .mw-agent-header .mw-agent-segmented > button.arhub-studio-icon-control {
+    min-width: 70px !important;
+    padding-inline: 6px !important;
+  }
+}
+
+/* React owns the contents of the two mode buttons and can recreate them after
+ * any switch.  Keep their semantic vector glyphs in CSS so the visual remains
+ * intact even between React renders. */
+html.arhub-editor-studio-active.mw-editor-active .mw-agent-header .mw-agent-segmented > button:not(.arhub-codex-editor-button):not(.arhub-studio-icon-control)::before {
+  content: "";
+  display: block;
+  flex: 0 0 auto;
+  width: 14px;
+  height: 14px;
+  background: currentColor;
+  -webkit-mask-position: center;
+  -webkit-mask-repeat: no-repeat;
+  -webkit-mask-size: 14px 14px;
+  mask-position: center;
+  mask-repeat: no-repeat;
+  mask-size: 14px 14px;
+}
+
+html.arhub-editor-studio-active.mw-editor-active .mw-agent-header .mw-agent-segmented > button:has(> svg)::before {
+  display: none;
+}
+
+html.arhub-editor-studio-active.mw-editor-active .mw-agent-header .mw-agent-segmented > button:not(.arhub-codex-editor-button):not(.arhub-studio-icon-control):first-child::before {
+  -webkit-mask-image: url("data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2024%2024'%20fill='none'%20stroke='black'%20stroke-width='2'%20stroke-linecap='round'%20stroke-linejoin='round'%3E%3Cpath%20d='M21%2015a4%204%200%200%201-4%204H8l-5%203V7a4%204%200%200%201%204-4h10a4%204%200%200%201%204%204z'/%3E%3C/svg%3E");
+  mask-image: url("data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2024%2024'%20fill='none'%20stroke='black'%20stroke-width='2'%20stroke-linecap='round'%20stroke-linejoin='round'%3E%3Cpath%20d='M21%2015a4%204%200%200%201-4%204H8l-5%203V7a4%204%200%200%201%204-4h10a4%204%200%200%201%204%204z'/%3E%3C/svg%3E");
+}
+
+html.arhub-editor-studio-active.mw-editor-active .mw-agent-header .mw-agent-segmented > button:not(.arhub-codex-editor-button):not(.arhub-studio-icon-control):nth-child(2)::before {
+  -webkit-mask-image: url("data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2024%2024'%20fill='none'%20stroke='black'%20stroke-width='2'%20stroke-linecap='round'%20stroke-linejoin='round'%3E%3Cpath%20d='m12%203-1.9%205.8a2%202%200%200%201-1.3%201.3L3%2012l5.8%201.9a2%202%200%200%201%201.3%201.3L12%2021l1.9-5.8a2%202%200%200%201%201.3-1.3L21%2012l-5.8-1.9a2%202%200%200%201-1.3-1.3z'/%3E%3Cpath%20d='M5%203v4'/%3E%3Cpath%20d='M19%2017v4'/%3E%3Cpath%20d='M3%205h4'/%3E%3Cpath%20d='M17%2019h4'/%3E%3C/svg%3E");
+  mask-image: url("data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2024%2024'%20fill='none'%20stroke='black'%20stroke-width='2'%20stroke-linecap='round'%20stroke-linejoin='round'%3E%3Cpath%20d='m12%203-1.9%205.8a2%202%200%200%201-1.3%201.3L3%2012l5.8%201.9a2%202%200%200%201%201.3%201.3L12%2021l1.9-5.8a2%202%200%200%201%201.3-1.3L21%2012l-5.8-1.9a2%202%200%200%201-1.3-1.3z'/%3E%3Cpath%20d='M5%203v4'/%3E%3Cpath%20d='M19%2017v4'/%3E%3Cpath%20d='M3%205h4'/%3E%3Cpath%20d='M17%2019h4'/%3E%3C/svg%3E");
+}

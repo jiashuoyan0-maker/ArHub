@@ -613,9 +613,13 @@ function decorateEditor() {
   syncEditorActions();
 }
 
-function updateRouteChrome() {
-  const route = getRoute();
+function syncRoutePage(route = getRoute()) {
   document.documentElement.dataset.mwPage = route.kind;
+  return route;
+}
+
+function updateRouteChrome() {
+  const route = syncRoutePage();
   const workflow = currentWorkflow(route);
   const title = document.getElementById("mw-shell-title");
   const eyebrow = document.getElementById("mw-shell-eyebrow");
@@ -712,8 +716,13 @@ new MutationObserver(syncThemeControl).observe(document.documentElement, {
 window.addEventListener("storage", (event) => {
   if (event.key === THEME_STORAGE_KEY) syncThemeControl();
 });
-window.addEventListener("popstate", scheduleShellEnhance);
-window.addEventListener("arhub:navigation", scheduleShellEnhance);
+function handleShellNavigation() {
+  syncRoutePage();
+  scheduleShellEnhance();
+}
+
+window.addEventListener("popstate", handleShellNavigation);
+window.addEventListener("arhub:navigation", handleShellNavigation);
 window.addEventListener("resize", () => {
   if (window.innerWidth > 860) document.body.classList.remove("mw-shell-mobile-open");
   scheduleShellEnhance();

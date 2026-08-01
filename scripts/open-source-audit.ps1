@@ -24,8 +24,20 @@ try {
         'backend/routers/editor.py'
         'backend/services/editor_agent.py'
         'backend/services/docx_exporter.py'
+        'backend/extension_registry.py'
+        'backend/routers/extensions.py'
+        'extension.schema.json'
+        'extensions/diagram/manifest.json'
+        'extensions/web/manifest.json'
         'dist/index.html'
+        'dist/splash.html'
         'dist/assets/index-BabYh3e1.js'
+        'dist/assets/apple-ui-20260727.css'
+        'dist/assets/arhub-icons.js'
+        'dist/assets/arhub-codex-desktop.css'
+        'dist/assets/arhub-codex-desktop.js'
+        'dist/assets/arhub-glass.css'
+        'licenses/LUCIDE-ISC.txt'
         'scripts/set-executable-resources.ps1'
     )
     $missingRequired = @($requiredFiles | Where-Object {
@@ -82,7 +94,7 @@ try {
         }
     }
 
-    $jsonFiles = @('package.json', 'updater-config.json', 'extension.schema.json', 'extensions/core/manifest.json')
+    $jsonFiles = @('package.json', 'updater-config.json', 'extension.schema.json', 'extensions/core/manifest.json', 'extensions/diagram/manifest.json', 'extensions/web/manifest.json')
     foreach ($path in $jsonFiles) {
         Get-Content -LiteralPath $path -Encoding UTF8 | ConvertFrom-Json | Out-Null
     }

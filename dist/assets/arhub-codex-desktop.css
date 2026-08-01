@@ -1,0 +1,660 @@
+/* Codex-inspired editor workbench. Loaded after the legacy Apple layer. */
+
+html.arhub-codex-editor-active {
+  --arhub-codex-sidebar-width: 252px;
+  --arhub-codex-context-width: minmax(352px, 0.72fr);
+  --arhub-codex-ease: cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+html.arhub-codex-editor-active main.max-w-7xl {
+  max-width: min(1920px, calc(100vw - 32px)) !important;
+  padding: 66px 0 16px !important;
+}
+
+html.arhub-codex-editor-active .mw-editor-shell {
+  display: grid !important;
+  grid-template-columns: var(--arhub-codex-sidebar-width) minmax(0, 1fr) 0 !important;
+  grid-template-areas: "files agent context" !important;
+  gap: 10px !important;
+  height: calc(100dvh - 132px) !important;
+  min-height: 580px;
+  overflow: hidden;
+  transition: grid-template-columns 240ms var(--arhub-codex-ease), gap 240ms var(--arhub-codex-ease) !important;
+}
+
+html.arhub-codex-editor-active .mw-editor-shell[data-arhub-codex-context="open"] {
+  grid-template-columns: var(--arhub-codex-sidebar-width) minmax(440px, 1fr) var(--arhub-codex-context-width) !important;
+}
+
+html.arhub-codex-editor-active .mw-editor-shell[data-arhub-codex-files="collapsed"] {
+  grid-template-columns: 56px minmax(0, 1fr) 0 !important;
+}
+
+html.arhub-codex-editor-active .mw-editor-shell[data-arhub-codex-files="collapsed"][data-arhub-codex-context="open"] {
+  grid-template-columns: 56px minmax(420px, 1fr) var(--arhub-codex-context-width) !important;
+}
+
+html.arhub-codex-editor-active .mw-editor-shell[data-arhub-codex-focus="true"] {
+  grid-template-columns: minmax(0, 1fr) !important;
+  grid-template-areas: "agent" !important;
+}
+
+html.arhub-codex-editor-active .mw-editor-shell[data-arhub-codex-focus="true"] .mw-files-panel,
+html.arhub-codex-editor-active .mw-editor-shell[data-arhub-codex-focus="true"] .mw-workbench {
+  display: none !important;
+}
+
+html.arhub-codex-editor-active .mw-files-panel,
+html.arhub-codex-editor-active .mw-agent-panel,
+html.arhub-codex-editor-active .mw-workbench {
+  min-width: 0;
+  min-height: 0;
+  border: 1px solid var(--apple-glass-border) !important;
+  border-radius: 16px !important;
+  box-shadow: var(--apple-shadow-small) !important;
+  backdrop-filter: saturate(175%) blur(28px);
+  -webkit-backdrop-filter: saturate(175%) blur(28px);
+}
+
+html.arhub-codex-editor-active .mw-files-panel {
+  grid-area: files !important;
+  padding: 10px !important;
+  overflow: hidden auto !important;
+  background: color-mix(in srgb, var(--apple-header) 88%, transparent) !important;
+  transition: padding 200ms var(--arhub-codex-ease), opacity 200ms var(--arhub-codex-ease) !important;
+}
+
+html.arhub-codex-editor-active .mw-editor-shell[data-arhub-codex-files="collapsed"] .mw-files-panel {
+  padding: 8px 5px !important;
+}
+
+html.arhub-codex-editor-active .mw-editor-shell[data-arhub-codex-files="collapsed"] .mw-files-panel > * {
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 120ms ease;
+}
+
+html.arhub-codex-editor-active .mw-editor-shell[data-arhub-codex-files="collapsed"] .mw-files-panel::before {
+  display: grid;
+  width: 44px;
+  height: 44px;
+  margin: 2px auto;
+  color: var(--text-secondary);
+  content: "☰";
+  font-size: 18px;
+  place-items: center;
+}
+
+html.arhub-codex-editor-active .mw-agent-panel {
+  grid-area: agent !important;
+  display: flex !important;
+  min-height: 0;
+  overflow: hidden !important;
+  border-color: color-mix(in srgb, var(--apple-separator) 75%, var(--accent) 25%) !important;
+  background: color-mix(in srgb, var(--apple-surface-strong) 92%, transparent) !important;
+  box-shadow: 0 18px 48px rgba(29, 29, 31, 0.08), inset 0 1px 0 var(--apple-glass-highlight) !important;
+}
+
+html.arhub-codex-editor-active .mw-agent-panel::before {
+  display: none;
+}
+
+html.arhub-codex-editor-active .mw-agent-header {
+  display: flex !important;
+  align-items: center;
+  gap: 12px;
+  min-height: 58px;
+  padding: 10px 14px !important;
+  border-color: var(--apple-separator) !important;
+  background: color-mix(in srgb, var(--apple-header) 90%, transparent) !important;
+}
+
+html.arhub-codex-editor-active .mw-agent-title {
+  font-size: 15px !important;
+  font-weight: 650 !important;
+  letter-spacing: -0.01em !important;
+}
+
+html.arhub-codex-editor-active .mw-agent-meta {
+  color: var(--text-muted) !important;
+  font-size: 12px !important;
+}
+
+.arhub-codex-agent-toolbar {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  margin-left: auto;
+  padding: 2px;
+  border: 1px solid color-mix(in srgb, var(--apple-separator) 86%, transparent);
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--apple-fill) 72%, transparent);
+}
+
+.arhub-codex-editor-button {
+  display: inline-grid;
+  width: 44px;
+  height: 44px;
+  margin: 0;
+  padding: 0;
+  color: var(--text-secondary);
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  cursor: pointer;
+  place-items: center;
+  transition: background 180ms var(--arhub-codex-ease), color 180ms var(--arhub-codex-ease), transform 120ms ease;
+}
+
+.arhub-codex-editor-button:hover,
+.arhub-codex-editor-button[aria-pressed="true"] {
+  color: var(--accent);
+  background: color-mix(in srgb, var(--accent-soft) 82%, transparent);
+}
+
+.arhub-codex-editor-button:focus-visible {
+  outline: 3px solid color-mix(in srgb, var(--accent) 35%, transparent);
+  outline-offset: 2px;
+}
+
+.arhub-codex-editor-button:active {
+  transform: scale(0.96);
+}
+
+html.arhub-codex-editor-active .mw-agent-thread {
+  min-height: 0;
+  padding: 28px clamp(22px, 4vw, 68px) 36px !important;
+  scroll-behavior: smooth;
+  background: color-mix(in srgb, var(--apple-surface) 56%, transparent) !important;
+}
+
+html.arhub-codex-editor-active .mw-agent-thread > .mw-message {
+  width: min(100%, 820px) !important;
+  margin: 0 auto 20px !important;
+  padding: 0 !important;
+  color: var(--text-primary) !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+html.arhub-codex-editor-active .mw-agent-thread > .mw-message[data-role="user"] {
+  width: fit-content !important;
+  max-width: min(100%, 720px);
+  margin-right: max(0px, calc((100% - 820px) / 2)) !important;
+  margin-left: auto !important;
+  padding: 12px 16px !important;
+  border: 1px solid color-mix(in srgb, var(--accent) 16%, var(--apple-separator)) !important;
+  border-radius: 16px !important;
+  background: color-mix(in srgb, var(--accent-soft) 74%, var(--apple-surface)) !important;
+}
+
+html.arhub-codex-editor-active .mw-message p,
+html.arhub-codex-editor-active .mw-message li {
+  font-size: 15px !important;
+  line-height: 1.68 !important;
+}
+
+html.arhub-codex-editor-active .mw-message pre {
+  overflow: auto;
+  padding: 14px 16px !important;
+  border: 1px solid var(--apple-separator) !important;
+  border-radius: 12px !important;
+  background: color-mix(in srgb, var(--apple-surface-solid) 88%, var(--apple-fill)) !important;
+  box-shadow: inset 0 1px 0 var(--apple-glass-highlight) !important;
+}
+
+html.arhub-codex-editor-active .mw-agent-composer {
+  padding: 14px clamp(14px, 3vw, 36px) 18px !important;
+  border-color: var(--apple-separator) !important;
+  background: color-mix(in srgb, var(--apple-header) 92%, transparent) !important;
+}
+
+html.arhub-codex-editor-active .mw-composer-row {
+  width: min(100%, 860px);
+  margin: 0 auto;
+  padding: 5px 6px 5px 16px !important;
+  border: 1px solid color-mix(in srgb, var(--apple-separator) 84%, transparent) !important;
+  border-radius: 16px !important;
+  background: color-mix(in srgb, var(--apple-surface-strong) 92%, transparent) !important;
+  box-shadow: 0 7px 18px rgba(29, 29, 31, 0.05), inset 0 1px 0 var(--apple-glass-highlight) !important;
+}
+
+html.arhub-codex-editor-active .mw-agent-input {
+  min-height: 44px !important;
+  color: var(--text-primary) !important;
+  background: transparent !important;
+}
+
+html.arhub-codex-editor-active .mw-composer-row > button {
+  min-width: 44px !important;
+  min-height: 44px !important;
+  border-radius: 12px !important;
+}
+
+html.arhub-codex-editor-active .mw-workspace-controls,
+html.arhub-codex-editor-active .mw-agent-launcher,
+html.arhub-codex-editor-active .mw-agent-resizer,
+html.arhub-codex-editor-active .mw-float-resizer {
+  display: none !important;
+}
+
+html.arhub-codex-editor-active .mw-workbench {
+  grid-area: context !important;
+  display: flex !important;
+  flex-direction: column;
+  min-width: 0;
+  overflow: hidden !important;
+  background: color-mix(in srgb, var(--apple-header) 92%, transparent) !important;
+  opacity: 0;
+  pointer-events: none;
+  transform: translateX(18px);
+  transition: opacity 210ms var(--arhub-codex-ease), transform 240ms var(--arhub-codex-ease) !important;
+}
+
+html.arhub-codex-editor-active .mw-editor-shell[data-arhub-codex-context="open"] .mw-workbench {
+  opacity: 1;
+  pointer-events: auto;
+  transform: translateX(0);
+}
+
+.arhub-codex-context-bar {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  min-height: 58px;
+  padding: 7px 8px 7px 14px;
+  border-bottom: 1px solid var(--apple-separator);
+  background: color-mix(in srgb, var(--apple-header) 90%, transparent);
+}
+
+.arhub-codex-context-title {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 9px;
+  color: var(--text-primary);
+  font-size: 13px;
+  font-weight: 620;
+}
+
+.arhub-codex-context-icon {
+  display: inline-grid;
+  flex: 0 0 auto;
+  width: 28px;
+  height: 28px;
+  color: var(--accent);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--accent-soft) 80%, transparent);
+  place-items: center;
+}
+
+.arhub-codex-context-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.arhub-codex-context-bar.is-empty .arhub-codex-context-name {
+  color: var(--text-muted);
+  font-weight: 500;
+}
+
+html.arhub-codex-editor-active .mw-workbench > .card {
+  flex: 1 1 auto;
+  min-width: 0;
+  border-color: transparent !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+html.arhub-codex-editor-active .mw-workbench .mw-editor-surface,
+html.arhub-codex-editor-active .mw-workbench .mw-preview-surface {
+  background: color-mix(in srgb, var(--apple-surface-strong) 92%, transparent) !important;
+}
+
+@media (max-width: 1280px) {
+  html.arhub-codex-editor-active .mw-editor-shell[data-arhub-codex-context="open"] {
+    grid-template-columns: 208px minmax(360px, 1fr) minmax(310px, 0.68fr) !important;
+  }
+}
+
+@media (max-width: 1040px) {
+  html.arhub-codex-editor-active .mw-editor-shell,
+  html.arhub-codex-editor-active .mw-editor-shell[data-arhub-codex-context="open"] {
+    grid-template-columns: 58px minmax(0, 1fr) !important;
+    grid-template-areas: "files agent" !important;
+  }
+
+  html.arhub-codex-editor-active .mw-files-panel {
+    padding: 8px 5px !important;
+  }
+
+  html.arhub-codex-editor-active .mw-files-panel > * {
+    opacity: 0;
+    pointer-events: none;
+  }
+
+  html.arhub-codex-editor-active .mw-files-panel::before {
+    display: grid;
+    width: 44px;
+    height: 44px;
+    margin: 2px auto;
+    content: "☰";
+    font-size: 18px;
+    place-items: center;
+  }
+
+  html.arhub-codex-editor-active .mw-workbench {
+    position: fixed !important;
+    z-index: 88;
+    top: 72px;
+    right: 12px;
+    bottom: 12px;
+    width: min(470px, calc(100vw - 84px));
+    opacity: 0;
+    pointer-events: none;
+    transform: translateX(24px);
+  }
+}
+
+@media (max-width: 680px) {
+  html.arhub-codex-editor-active main.max-w-7xl {
+    padding: 58px 0 0 !important;
+  }
+
+  html.arhub-codex-editor-active .mw-editor-shell {
+    height: calc(100dvh - 108px) !important;
+    min-height: 460px;
+    gap: 6px !important;
+  }
+
+  html.arhub-codex-editor-active .mw-agent-panel {
+    border-radius: 12px !important;
+  }
+
+  html.arhub-codex-editor-active .mw-agent-header {
+    min-height: 54px;
+    padding: 5px 8px !important;
+  }
+
+  .arhub-codex-agent-toolbar {
+    gap: 0;
+  }
+
+  .arhub-codex-editor-button {
+    width: 44px;
+    height: 44px;
+  }
+
+  html.arhub-codex-editor-active .mw-agent-thread {
+    padding: 20px 16px 26px !important;
+  }
+
+  html.arhub-codex-editor-active .mw-agent-composer {
+    padding: 10px 10px 12px !important;
+  }
+}
+
+@supports not (backdrop-filter: blur(1px)) {
+  html.arhub-codex-editor-active .mw-files-panel,
+  html.arhub-codex-editor-active .mw-agent-panel,
+  html.arhub-codex-editor-active .mw-workbench {
+    background: var(--apple-surface-solid) !important;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html.arhub-codex-editor-active .mw-editor-shell,
+  html.arhub-codex-editor-active .mw-files-panel,
+  html.arhub-codex-editor-active .mw-workbench,
+  .arhub-codex-editor-button {
+    transition: none !important;
+  }
+}
+
+/*
+ * The legacy workspace shell ships a deliberately agent-only rule with a
+ * higher selector weight.  Keep this coordination block last so the editor
+ * can offer an on-demand file rail and context pane without changing the
+ * underlying workspace behaviour.
+ */
+html.arhub-codex-editor-active.mw-editor-active .mw-editor-shell[data-mw-layout] {
+  display: grid !important;
+  grid-template-columns: var(--arhub-codex-sidebar-width) minmax(0, 1fr) 0 !important;
+  grid-template-rows: minmax(0, 1fr) !important;
+  grid-template-areas: "files agent context" !important;
+  gap: 10px !important;
+}
+
+html.arhub-codex-editor-active.mw-editor-active .mw-editor-shell[data-mw-layout][data-arhub-codex-context="open"] {
+  grid-template-columns: var(--arhub-codex-sidebar-width) minmax(440px, 1fr) var(--arhub-codex-context-width) !important;
+}
+
+html.arhub-codex-editor-active.mw-editor-active .mw-editor-shell[data-mw-layout][data-arhub-codex-files="collapsed"] {
+  grid-template-columns: 0 minmax(0, 1fr) 0 !important;
+}
+
+html.arhub-codex-editor-active.mw-editor-active .mw-editor-shell[data-mw-layout][data-arhub-codex-files="collapsed"][data-arhub-codex-context="open"] {
+  grid-template-columns: 0 minmax(420px, 1fr) var(--arhub-codex-context-width) !important;
+}
+
+html.arhub-codex-editor-active.mw-editor-active .mw-editor-shell[data-mw-layout][data-arhub-codex-focus="true"] {
+  grid-template-columns: minmax(0, 1fr) !important;
+  grid-template-areas: "agent" !important;
+}
+
+html.arhub-codex-editor-active.mw-editor-active .mw-editor-shell[data-mw-layout] .mw-agent-panel {
+  display: flex !important;
+  grid-area: agent !important;
+  width: auto !important;
+  max-width: none !important;
+  min-width: 0 !important;
+  justify-self: stretch !important;
+}
+
+html.arhub-codex-editor-active.mw-editor-active .mw-editor-shell[data-mw-layout][data-arhub-codex-files] .mw-files-panel {
+  display: block !important;
+  grid-area: files !important;
+  min-width: 0 !important;
+}
+
+html.arhub-codex-editor-active.mw-editor-active .mw-editor-shell[data-mw-layout][data-arhub-codex-files="collapsed"] .mw-files-panel {
+  display: none !important;
+}
+
+html.arhub-codex-editor-active.mw-editor-active .mw-editor-shell[data-mw-layout] .mw-workbench {
+  display: flex !important;
+  grid-area: context !important;
+  min-width: 0 !important;
+  flex-direction: column !important;
+}
+
+html.arhub-codex-editor-active.mw-editor-active .mw-editor-shell[data-mw-layout][data-arhub-codex-context="closed"] .mw-workbench {
+  visibility: hidden;
+  opacity: 0;
+  pointer-events: none;
+  transform: translateX(18px);
+}
+
+html.arhub-codex-editor-active.mw-editor-active .mw-editor-shell[data-mw-layout][data-arhub-codex-context="open"] .mw-workbench {
+  visibility: visible;
+  opacity: 1;
+  pointer-events: auto;
+  transform: none;
+}
+
+html.arhub-codex-editor-active.mw-editor-active .mw-agent-header .arhub-codex-agent-toolbar.mw-agent-segmented {
+  display: flex !important;
+  flex: 0 0 auto !important;
+  width: max-content !important;
+  min-width: max-content !important;
+  grid-auto-flow: unset !important;
+  grid-auto-columns: unset !important;
+  gap: 3px !important;
+  margin: 0 0 0 auto !important;
+  padding: 2px !important;
+}
+
+html.arhub-codex-editor-active.mw-editor-active .mw-agent-header .arhub-codex-agent-toolbar.mw-agent-segmented > .arhub-codex-editor-button {
+  display: grid !important;
+  flex: 0 0 44px !important;
+  width: 44px !important;
+  min-width: 44px !important;
+  height: 44px !important;
+  min-height: 44px !important;
+  margin: 0 !important;
+  padding: 0 !important;
+}
+
+html.arhub-codex-editor-active.mw-editor-active .mw-files-panel button[data-arhub-codex-file-icon="true"] {
+  display: flex !important;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.arhub-codex-file-icon {
+  display: inline-grid;
+  flex: 0 0 16px;
+  width: 16px;
+  height: 16px;
+  color: var(--text-faint);
+  place-items: center;
+}
+
+.arhub-codex-file-icon[data-kind="markdown"],
+.arhub-codex-file-icon[data-kind="document"] {
+  color: #5ea6ff;
+}
+
+.arhub-codex-file-icon[data-kind="pdf"] {
+  color: #ff6a7a;
+}
+
+.arhub-codex-file-icon[data-kind="code"] {
+  color: #a78bfa;
+}
+
+.arhub-codex-file-icon[data-kind="data"],
+.arhub-codex-file-icon[data-kind="spreadsheet"] {
+  color: #48d597;
+}
+
+.arhub-codex-file-icon[data-kind="image"] {
+  color: #ffb467;
+}
+
+.arhub-codex-file-icon[data-kind="diagram"] {
+  color: #72d8ee;
+}
+
+@media (max-width: 1280px) {
+  html.arhub-codex-editor-active.mw-editor-active .mw-editor-shell[data-mw-layout][data-arhub-codex-context="open"] {
+    grid-template-columns: 208px minmax(360px, 1fr) minmax(310px, 0.68fr) !important;
+  }
+}
+
+@media (max-width: 1040px) {
+  html.arhub-codex-editor-active.mw-editor-active .mw-editor-shell[data-mw-layout],
+  html.arhub-codex-editor-active.mw-editor-active .mw-editor-shell[data-mw-layout][data-arhub-codex-context="open"],
+  html.arhub-codex-editor-active.mw-editor-active .mw-editor-shell[data-mw-layout][data-arhub-codex-files="collapsed"],
+  html.arhub-codex-editor-active.mw-editor-active .mw-editor-shell[data-mw-layout][data-arhub-codex-files="collapsed"][data-arhub-codex-context="open"] {
+    grid-template-columns: 58px minmax(0, 1fr) !important;
+    grid-template-areas: "files agent" !important;
+  }
+
+  html.arhub-codex-editor-active.mw-editor-active .mw-editor-shell[data-mw-layout] .mw-workbench {
+    position: fixed !important;
+    z-index: 88;
+    top: 72px;
+    right: 12px;
+    bottom: 12px;
+    width: min(470px, calc(100vw - 84px)) !important;
+  }
+}
+
+/* Context is automatic: file selection, not a layout switch, opens the preview. */
+html.arhub-codex-editor-active.mw-editor-active header .mw-shell-action-group,
+html.arhub-codex-editor-active.mw-editor-active .mw-agent-header .arhub-codex-agent-toolbar.mw-agent-segmented,
+html.arhub-codex-editor-active.mw-editor-active .mw-shell-icon-button.mw-context-close,
+html.arhub-codex-editor-active.mw-editor-active .mw-shell-icon-button.mw-files-close {
+  display: none !important;
+}
+
+.arhub-codex-file-launcher {
+  display: none !important;
+}
+
+@media (max-width: 1040px) {
+  html.arhub-codex-editor-active.mw-editor-active .mw-editor-shell[data-mw-layout][data-arhub-codex-files="expanded"][data-arhub-codex-mobile-files="closed"],
+  html.arhub-codex-editor-active.mw-editor-active .mw-editor-shell[data-mw-layout][data-arhub-codex-files="expanded"][data-arhub-codex-mobile-files="open"] {
+    grid-template-columns: 58px minmax(0, 1fr) !important;
+    grid-template-areas: "files agent" !important;
+  }
+
+  html.arhub-codex-editor-active.mw-editor-active .mw-editor-shell[data-mw-layout][data-arhub-codex-files="expanded"][data-arhub-codex-mobile-files="open"] {
+    grid-template-columns: minmax(220px, 38%) minmax(0, 1fr) !important;
+  }
+
+  html.arhub-codex-editor-active.mw-editor-active .mw-editor-shell[data-mw-layout][data-arhub-codex-files="expanded"][data-arhub-codex-mobile-files="open"] .mw-files-panel {
+    padding-top: 60px !important;
+  }
+
+  html.arhub-codex-editor-active.mw-editor-active .mw-editor-shell[data-mw-layout][data-arhub-codex-files="expanded"] .mw-files-panel {
+    display: block !important;
+    position: relative;
+    padding: 8px 5px !important;
+  }
+
+  html.arhub-codex-editor-active.mw-editor-active .mw-editor-shell[data-mw-layout] .mw-files-panel::before {
+    display: none !important;
+    content: none !important;
+    pointer-events: none !important;
+  }
+
+  html.arhub-codex-editor-active.mw-editor-active .mw-editor-shell[data-mw-layout][data-arhub-codex-files="expanded"][data-arhub-codex-mobile-files="closed"] .mw-files-panel > * {
+    opacity: 0 !important;
+    pointer-events: none !important;
+  }
+
+  html.arhub-codex-editor-active.mw-editor-active .mw-editor-shell[data-mw-layout][data-arhub-codex-files="expanded"][data-arhub-codex-mobile-files="open"] .mw-files-panel > * {
+    opacity: 1 !important;
+    pointer-events: auto !important;
+  }
+
+  html.arhub-codex-editor-active.mw-editor-active .mw-files-panel > .arhub-codex-file-launcher {
+    display: grid !important;
+    position: absolute;
+    z-index: 3;
+    top: 8px;
+    left: 7px;
+    width: 44px;
+    min-width: 44px;
+    height: 44px;
+    min-height: 44px;
+    padding: 0 !important;
+    color: var(--text-secondary);
+    border: 1px solid var(--apple-separator) !important;
+    border-radius: 12px !important;
+    background: color-mix(in srgb, var(--apple-fill) 76%, transparent) !important;
+    box-shadow: inset 0 1px var(--apple-glass-highlight);
+    cursor: pointer;
+    opacity: 1 !important;
+    pointer-events: auto !important;
+    place-items: center;
+  }
+
+  html.arhub-codex-editor-active.mw-editor-active .mw-editor-shell[data-arhub-codex-mobile-files="open"] .arhub-codex-file-launcher {
+    color: var(--accent);
+    background: color-mix(in srgb, var(--accent-soft) 80%, transparent) !important;
+  }
+
+  html.arhub-codex-editor-active.mw-editor-active .mw-editor-shell[data-arhub-codex-mobile-files="open"] .mw-files-panel > :not(.arhub-codex-file-launcher) {
+    padding-left: 0;
+  }
+}

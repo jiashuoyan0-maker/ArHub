@@ -1,0 +1,368 @@
+import { createIcon, fileVisual } from "./arhub-icons.js";
+
+const EDITOR_ROUTE = /^\/workflow\/[^/]+\/editor\/?$/;
+const WORKFLOW_ROUTE = /^\/workflow\/[^/]+\/?$/;
+const ARTIFACT_ROUTE = /^\/workflow\/[^/]+\/artifact\//;
+const FILE_NAME_PATTERN = /(?:^|\/)[^/]+\.[a-z0-9]{1,8}$/i;
+const TYPE_MARKERS = new Set([
+  "MD",
+  "MARKDOWN",
+  "PDF",
+  "DOC",
+  "DOCX",
+  "TXT",
+  "JSON",
+  "YAML",
+  "YML",
+  "CSV",
+  "XLSX",
+  "PPTX",
+  "IMG",
+  "IMAGE",
+  "PY",
+  "JS",
+  "TS",
+  "DRAWIO",
+]);
+
+const KICKERS = Object.freeze({
+  workflows: "ARHUB WORKSPACE",
+  workflow: "WORKFLOW STUDIO",
+  artifact: "ARTIFACT VIEWER",
+  settings: "SYSTEM SETTINGS",
+  new: "NEW WORKFLOW",
+});
+
+let scheduled = false;
+
+function currentView() {
+  const path = window.location.pathname;
+  if (EDITOR_ROUTE.test(path)) return "";
+  if (ARTIFACT_ROUTE.test(path)) return "artifact";
+  if (WORKFLOW_ROUTE.test(path)) return "workflow";
+  if (path.startsWith("/settings")) return "settings";
+  if (path === "/new" || path === "/new/") return "new";
+  return "workflows";
+}
+
+function normalizedText(element) {
+  return String(element?.textContent || "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function hasDirectClass(element, className) {
+  return Array.from(element.children).some((child) => child.classList?.contains(className));
+}
+
+function addLeadingIcon(element, iconName, className, size = 16) {
+  if (!(element instanceof HTMLElement) || hasDirectClass(element, className)) return;
+  const holder = document.createElement("span");
+  holder.className = className;
+  holder.setAttribute("aria-hidden", "true");
+  holder.append(createIcon(iconName, { size, strokeWidth: 1.75 }));
+  element.prepend(holder);
+}
+
+function actionIcon(label) {
+  if (/^(?:导入|上传文件)$/.test(label)) return "Upload";
+  if (/^下载$/.test(label)) return "Download";
+  if (/^导出$/.test(label)) return "ArrowDown";
+  if (/^全屏查看$/.test(label)) return "ExternalLink";
+  if (/^(?:重新运行|重新执行此步骤)$/.test(label)) return "RefreshCw";
+  if (/^测试连接$/.test(label)) return "Link2";
+  if (/^保存(?:配置|设置)?$/.test(label)) return "Save";
+  if (/^编辑器$/.test(label)) return "FilePenLine";
+  if (/^新建工作流$/.test(label)) return "Plus";
+  return "";
+}
+
+function decorateActions(main) {
+  main.querySelectorAll("button, a").forEach((element) => {
+    const label = normalizedText(element);
+    const iconName = actionIcon(label.replace(/^\+\s*/, ""));
+    if (!iconName || label.length > 40) return;
+    if (/^\+\s*新建工作流$/.test(label)) {
+      Array.from(element.childNodes).forEach((node) => {
+        if (node.nodeType === Node.TEXT_NODE) {
+          node.textContent = String(node.textContent || "").replace(/^\s*\+\s*/, "");
+        }
+      });
+    }
+    element.classList.add("arhub-studio-action");
+    addLeadingIcon(element, iconName, "arhub-studio-action-icon");
+  });
+}
+
+function decorateKicker(main, view) {
+  const heading = main.querySelector("h1");
+  const parent = heading?.parentElement;
+  if (!(heading instanceof HTMLElement) || !(parent instanceof HTMLElement)) return;
+  let kicker = Array.from(parent.children).find((child) =>
+    child.classList?.contains("arhub-studio-kicker"),
+  );
+  if (!(kicker instanceof HTMLElement)) {
+    kicker = document.createElement("span");
+    kicker.className = "arhub-studio-kicker";
+    parent.insertBefore(kicker, heading);
+  }
+  if (!kicker.querySelector(":scope > svg")) {
+    kicker.append(createIcon(view === "settings" ? "SlidersHorizontal" : "Sparkles", {
+      size: 13,
+      strokeWidth: 1.9,
+    }));
+  }
+  let caption = kicker.querySelector(":scope > .arhub-studio-kicker-text");
+  if (!(caption instanceof HTMLElement)) {
+    caption = document.createElement("span");
+    caption.className = "arhub-studio-kicker-text";
+    kicker.append(caption);
+  }
+  caption.textContent = KICKERS[view] || "ARHUB STUDIO";
+}
+
+function decorateWorkflowSummary(main) {
+  const stats = main.querySelector(".grid.grid-cols-4");
+  if (stats instanceof HTMLElement) {
+    stats.classList.add("arhub-studio-stat-grid");
+    const iconByLabel = ["LayoutDashboard", "Zap", "Check", "CircleDotDashed"];
+    Array.from(stats.children).forEach((card, index) => {
+      if (!(card instanceof HTMLElement)) return;
+      card.classList.add("arhub-studio-stat");
+      card.dataset.arhubStat = String(index);
+      if (!hasDirectClass(card, "arhub-studio-stat-icon")) {
+        const icon = document.createElement("span");
+        icon.className = "arhub-studio-stat-icon";
+        icon.setAttribute("aria-hidden", "true");
+        icon.append(createIcon(iconByLabel[index] || "Gauge", { size: 16, strokeWidth: 1.8 }));
+        card.prepend(icon);
+      }
+    });
+  }
+
+  main.querySelectorAll(".space-y-2 > .card").forEach((row) => {
+    if (!(row instanceof HTMLElement)) return;
+    const link = row.querySelector('a[href^="/workflow/"]');
+    if (!(link instanceof HTMLElement)) return;
+    row.classList.add("arhub-studio-workflow-row");
+    link.classList.add("arhub-studio-workflow-title");
+    addLeadingIcon(link, "Workflow", "arhub-studio-workflow-icon", 18);
+  });
+}
+
+function findArtifactRow(button, main) {
+  let row = button.parentElement;
+  for (let depth = 0; row && row !== main && depth < 4; depth += 1, row = row.parentElement) {
+    if (row.querySelector('a[href*="/artifacts/"]')) return row;
+  }
+  return null;
+}
+
+function decorateFileRows(main) {
+  main.querySelectorAll("button").forEach((button) => {
+    const fileName = normalizedText(button);
+    if (!FILE_NAME_PATTERN.test(fileName)) return;
+    const row = findArtifactRow(button, main);
+    if (!(row instanceof HTMLElement)) return;
+    row.classList.add("arhub-studio-file-row");
+    button.classList.add("arhub-studio-file-name");
+    const visual = fileVisual(fileName);
+    addLeadingIcon(button, visual.icon, "arhub-studio-file-name-icon", 16);
+  });
+
+  main.querySelectorAll("button").forEach((button) => {
+    const label = normalizedText(button);
+    if (!/\d+\s*个文件$/.test(label)) return;
+    button.classList.add("arhub-studio-artifact-group");
+    addLeadingIcon(button, "FolderOpen", "arhub-studio-artifact-group-icon", 16);
+  });
+
+  main.querySelectorAll(".arhub-studio-file-row").forEach((row) => {
+    row.querySelectorAll("a").forEach((link) => {
+      const label = normalizedText(link);
+      if (label === "下载") addLeadingIcon(link, "Download", "arhub-studio-inline-link-icon", 14);
+      if (label === "全屏查看") {
+        addLeadingIcon(link, "ExternalLink", "arhub-studio-inline-link-icon", 14);
+      }
+    });
+  });
+}
+
+function decorateFileTypeMarkers(main) {
+  main.querySelectorAll("div, span").forEach((marker) => {
+    if (!(marker instanceof HTMLElement) || marker.children.length > 0) return;
+    const type = normalizedText(marker).toUpperCase();
+    if (!TYPE_MARKERS.has(type) || marker.dataset.arhubStudioType === type) return;
+    const row = marker.closest(".arhub-studio-file-row");
+    if (!(row instanceof HTMLElement)) return;
+    const fileName = normalizedText(row.querySelector(".arhub-studio-file-name"));
+    if (!FILE_NAME_PATTERN.test(fileName)) return;
+    const visual = fileVisual(fileName);
+    marker.dataset.arhubStudioType = type;
+    marker.classList.add("arhub-studio-file-type");
+    marker.setAttribute("title", `${visual.label} file`);
+    marker.setAttribute("aria-label", `${visual.label} file`);
+    marker.replaceChildren(createIcon(visual.icon, { size: 17, strokeWidth: 1.8 }));
+  });
+}
+
+function findLeafTextElement(root, pattern) {
+  return Array.from(root.querySelectorAll("span, div, p")).find((element) =>
+    element.children.length === 0 && pattern.test(normalizedText(element)),
+  );
+}
+
+function decoratePipeline(main) {
+  const grid = main.querySelector(".grid.grid-cols-1");
+  const pipeline = grid?.firstElementChild;
+  if (!(pipeline instanceof HTMLElement) || !pipeline.classList.contains("space-y-2")) return;
+  pipeline.classList.add("arhub-studio-pipeline");
+  Array.from(pipeline.children).forEach((row) => {
+    if (!(row instanceof HTMLElement)) return;
+    const toggle = Array.from(row.children).find((child) => child instanceof HTMLButtonElement);
+    if (!(toggle instanceof HTMLButtonElement) || !/^[✓✔]/.test(normalizedText(toggle))) return;
+    row.classList.add("arhub-studio-step-row");
+    toggle.classList.add("arhub-studio-step-toggle");
+
+    const check = findLeafTextElement(toggle, /^[✓✔]$/);
+    if (check instanceof HTMLElement && !check.classList.contains("arhub-studio-status-icon")) {
+      check.className = `${check.className} arhub-studio-status-icon`.trim();
+      check.replaceChildren(createIcon("Check", { size: 15, strokeWidth: 2.2 }));
+      check.setAttribute("aria-label", "completed");
+    }
+
+    const checkpoint = findLeafTextElement(toggle, /检查点/);
+    if (checkpoint instanceof HTMLElement) {
+      checkpoint.classList.add("arhub-studio-checkpoint");
+      addLeadingIcon(checkpoint, "Flag", "arhub-studio-checkpoint-icon", 13);
+    }
+  });
+}
+
+function decorateSettings(main) {
+  main.querySelectorAll(".space-y-6 > .card").forEach((card, index) => {
+    if (!(card instanceof HTMLElement)) return;
+    card.classList.add("arhub-studio-settings-card");
+    const text = normalizedText(card);
+    const icon = /执行者/.test(text)
+      ? "Bot"
+      : /审稿/.test(text)
+        ? "ScanSearch"
+        : /编辑器/.test(text)
+          ? "FilePenLine"
+          : index === 3
+            ? "SlidersHorizontal"
+            : "Settings";
+    const title = Array.from(card.querySelectorAll("p")).find((item) => {
+      const value = normalizedText(item);
+      return /(?:执行者|审稿者|编辑器 AI 助手|其他配置)/.test(value);
+    });
+    let heading = title?.parentElement;
+    // "其他配置" keeps its title and description directly in the card.  Do
+    // not turn the whole card into the two-column heading grid: that makes the
+    // following form grid shrink to the icon column.  Give those two lines a
+    // real heading wrapper instead.
+    if (heading === card && title instanceof HTMLElement) {
+      const subtitle = title.nextElementSibling;
+      const wrapper = document.createElement("div");
+      wrapper.className = "arhub-studio-settings-heading";
+      card.insertBefore(wrapper, title);
+      wrapper.append(title);
+      if (subtitle instanceof HTMLParagraphElement) wrapper.append(subtitle);
+      heading = wrapper;
+    }
+    card.classList.remove("arhub-studio-settings-heading");
+    if (heading instanceof HTMLElement) {
+      heading.classList.add("arhub-studio-settings-heading");
+      addLeadingIcon(heading, icon, "arhub-studio-settings-heading-icon", 19);
+    }
+  });
+
+  main.querySelectorAll("input, textarea, select").forEach((field) => {
+    const container = field.parentElement;
+    if (!(container instanceof HTMLElement)) return;
+    container.classList.add("arhub-studio-field");
+    const label = Array.from(container.children).find(
+      (child) => child !== field && child instanceof HTMLElement,
+    );
+    if (!(label instanceof HTMLElement)) return;
+    label.classList.add("arhub-studio-field-label");
+    const text = normalizedText(label);
+    const icon = /Base URL/i.test(text)
+      ? "Network"
+      : /API Key/i.test(text)
+        ? "KeyRound"
+        : /Model ID/i.test(text)
+          ? "BrainCircuit"
+          : /Image/i.test(text)
+            ? "ImagePlus"
+            : "";
+    if (icon) addLeadingIcon(label, icon, "arhub-studio-field-label-icon", 13);
+  });
+}
+
+function decorateStudio(view) {
+  const main = document.querySelector("#root main");
+  if (!(main instanceof HTMLElement)) return;
+  main.dataset.arhubStudioView = view;
+  main.classList.add("arhub-studio-main");
+  decorateKicker(main, view);
+  decorateActions(main);
+
+  if (view === "workflows") decorateWorkflowSummary(main);
+  if (view === "workflow" || view === "artifact") {
+    decoratePipeline(main);
+    decorateFileRows(main);
+    decorateFileTypeMarkers(main);
+  }
+  if (view === "settings") decorateSettings(main);
+}
+
+function syncStudioRouteState() {
+  const view = currentView();
+  const html = document.documentElement;
+  html.classList.toggle("arhub-studio-shell-active", Boolean(view));
+  document.body.classList.toggle("arhub-studio-shell", Boolean(view));
+
+  if (!view) {
+    delete html.dataset.arhubStudioView;
+    return view;
+  }
+
+  html.dataset.arhubStudioView = view;
+  if (!window.matchMedia("(max-width: 860px)").matches) {
+    document.body.classList.remove("mw-shell-collapsed");
+  }
+  return view;
+}
+
+function applyStudioShell() {
+  const view = syncStudioRouteState();
+  if (!view) return;
+  decorateStudio(view);
+}
+
+function scheduleApply() {
+  if (scheduled) return;
+  scheduled = true;
+  window.requestAnimationFrame(() => {
+    scheduled = false;
+    applyStudioShell();
+  });
+}
+
+function handleStudioNavigation() {
+  syncStudioRouteState();
+  scheduleApply();
+}
+
+window.addEventListener("arhub:navigation", handleStudioNavigation);
+window.addEventListener("popstate", handleStudioNavigation);
+window.addEventListener("resize", scheduleApply, { passive: true });
+
+const root = document.getElementById("root");
+if (root) {
+  new MutationObserver(scheduleApply).observe(root, { childList: true, subtree: true });
+}
+
+scheduleApply();

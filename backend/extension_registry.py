@@ -42,6 +42,8 @@ class ExtensionRegistry:
         profiles: list[dict[str, Any]] = []
         commands: list[dict[str, Any]] = []
         tool_adapters: list[dict[str, Any]] = []
+        views: list[dict[str, Any]] = []
+        actions: list[dict[str, Any]] = []
         errors: list[dict[str, str]] = []
         extension_ids: set[str] = set()
         contribution_ids: set[str] = set()
@@ -75,16 +77,32 @@ class ExtensionRegistry:
                         source,
                         contribution_ids,
                     )
+                    extension_views = self._normalize_views(
+                        extension_id,
+                        contributions.get("views") or [],
+                        source,
+                        contribution_ids,
+                    )
+                    extension_actions = self._normalize_actions(
+                        extension_id,
+                        contributions.get("actions") or [],
+                        source,
+                        contribution_ids,
+                    )
 
                     extension["contribution_counts"] = {
                         "agent_profiles": len(extension_profiles),
                         "commands": len(extension_commands),
                         "tool_adapters": len(extension_tools),
+                        "views": len(extension_views),
+                        "actions": len(extension_actions),
                     }
                     extensions.append(extension)
                     profiles.extend(extension_profiles)
                     commands.extend(extension_commands)
                     tool_adapters.extend(extension_tools)
+                    views.extend(extension_views)
+                    actions.extend(extension_actions)
                 except (OSError, UnicodeError, json.JSONDecodeError, ValueError) as exc:
                     errors.append(
                         {
@@ -100,6 +118,8 @@ class ExtensionRegistry:
             "agent_profiles": profiles,
             "commands": commands,
             "tool_adapters": tool_adapters,
+            "views": views,
+            "actions": actions,
             "errors": errors,
             "policy": {
                 "manifest_only": True,
@@ -267,6 +287,78 @@ class ExtensionRegistry:
                     "description": str(value.get("description") or "")[:180],
                     "protocol": str(value.get("protocol") or "manifest-v1")[:32],
                     "enabled": False,
+                    "source": source,
+                }
+            )
+        return result
+
+    def _normalize_views(
+        self,
+        extension_id: str,
+        values: Any,
+        source: str,
+        contribution_ids: set[str],
+    ) -> list[dict[str, Any]]:
+        if not isinstance(values, list):
+            raise ValueError("contributes.views must be an array")
+        result: list[dict[str, Any]] = []
+        for value in values:
+            if not isinstance(value, dict):
+                raise ValueError("view must be an object")
+            local_id = self._validate_id(value.get("id"), "view id")
+            qualified_id = f"{extension_id}/{local_id}"
+            self._claim_contribution_id(qualified_id, contribution_ids)
+            label = value.get("label")
+            kind = value.get("kind")
+            if not isinstance(label, str) or not label.strip():
+                raise ValueError("view label is required")
+            if kind not in {"diagram", "web", "document", "data"}:
+                raise ValueError(f"invalid view kind: {kind!r}")
+            result.append(
+                {
+                    "id": qualified_id,
+                    "extension_id": extension_id,
+                    "local_id": local_id,
+                    "label": label.strip()[:64],
+                    "description": str(value.get("description") or "")[:180],
+                    "kind": kind,
+                    "icon": str(value.get("icon") or "")[:48],
+                    "source": source,
+                }
+            )
+        return result
+
+    def _normalize_actions(
+        self,
+        extension_id: str,
+        values: Any,
+        source: str,
+        contribution_ids: set[str],
+    ) -> list[dict[str, Any]]:
+        if not isinstance(values, list):
+            raise ValueError("contributes.actions must be an array")
+        result: list[dict[str, Any]] = []
+        for value in values:
+            if not isinstance(value, dict):
+                raise ValueError("action must be an object")
+            local_id = self._validate_id(value.get("id"), "action id")
+            qualified_id = f"{extension_id}/{local_id}"
+            self._claim_contribution_id(qualified_id, contribution_ids)
+            label = value.get("label")
+            handler = value.get("handler")
+            if not isinstance(label, str) or not label.strip():
+                raise ValueError("action label is required")
+            if not isinstance(handler, str) or not handler.startswith("builtin."):
+                raise ValueError("action handler must use the builtin namespace")
+            result.append(
+                {
+                    "id": qualified_id,
+                    "extension_id": extension_id,
+                    "local_id": local_id,
+                    "label": label.strip()[:64],
+                    "description": str(value.get("description") or "")[:180],
+                    "handler": handler[:96],
+                    "enabled": source == "builtin",
                     "source": source,
                 }
             )

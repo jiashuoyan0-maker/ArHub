@@ -28,6 +28,14 @@
         "tool_adapters": {
           "type": "array",
           "items": { "$ref": "#/$defs/tool_adapter" }
+        },
+        "views": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/view" }
+        },
+        "actions": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/action" }
         }
       }
     }
@@ -78,6 +86,33 @@
         "label": { "type": "string", "minLength": 1, "maxLength": 64 },
         "description": { "type": "string", "maxLength": 180 },
         "protocol": { "type": "string", "maxLength": 32 }
+      }
+    },
+    "view": {
+      "type": "object",
+      "required": ["id", "label", "kind"],
+      "additionalProperties": false,
+      "properties": {
+        "id": { "$ref": "#/$defs/id" },
+        "label": { "type": "string", "minLength": 1, "maxLength": 64 },
+        "description": { "type": "string", "maxLength": 180 },
+        "kind": { "enum": ["diagram", "web", "document", "data"] },
+        "icon": { "type": "string", "maxLength": 48 }
+      }
+    },
+    "action": {
+      "type": "object",
+      "required": ["id", "label", "handler"],
+      "additionalProperties": false,
+      "properties": {
+        "id": { "$ref": "#/$defs/id" },
+        "label": { "type": "string", "minLength": 1, "maxLength": 64 },
+        "description": { "type": "string", "maxLength": 180 },
+        "handler": {
+          "type": "string",
+          "pattern": "^builtin\\.[a-z0-9._-]+$",
+          "maxLength": 96
+        }
       }
     }
   }

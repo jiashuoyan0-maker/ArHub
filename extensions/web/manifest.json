@@ -1,0 +1,36 @@
+{
+  "schema_version": "1.0",
+  "id": "arhub.web",
+  "name": "Web Studio",
+  "version": "0.1.0",
+  "description": "Create a local HTML, CSS and JavaScript project with an isolated in-app preview.",
+  "license": "MIT",
+  "contributes": {
+    "commands": [
+      {
+        "id": "build-webpage",
+        "label": "让 Agent 构建网页",
+        "description": "根据当前需求完善网页项目并验证预览。",
+        "prompt": "根据当前任务创建或完善 web/ 下的静态网页项目。使用语义化 HTML、独立 CSS 和 JavaScript；优先保证可读性、响应式和本地预览可用。完成后说明改动了哪些文件。"
+      }
+    ],
+    "views": [
+      {
+        "id": "preview",
+        "label": "网页预览",
+        "description": "在隔离预览框中查看当前工作区的静态网页。",
+        "kind": "web",
+        "icon": "Code2"
+      }
+    ],
+    "actions": [
+      {
+        "id": "create",
+        "label": "新建网页项目",
+        "description": "创建包含 HTML、CSS 和 JavaScript 的可预览网页项目。",
+        "handler": "builtin.web.create"
+      }
+    ],
+    "tool_adapters": []
+  }
+}

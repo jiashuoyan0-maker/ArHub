@@ -1,0 +1,36 @@
+{
+  "schema_version": "1.0",
+  "id": "arhub.diagram",
+  "name": "Diagram Studio",
+  "version": "0.1.0",
+  "description": "Create editable Mermaid flowcharts and a local SVG preview inside the workspace.",
+  "license": "MIT",
+  "contributes": {
+    "commands": [
+      {
+        "id": "draft-flowchart",
+        "label": "让 Agent 规划流程图",
+        "description": "把当前目标整理为可编辑 Mermaid 流程图。",
+        "prompt": "根据当前任务和工作区内容，先设计一张清晰的流程图。将可编辑源文件写入 diagrams/，使用 Mermaid flowchart 语法，并解释每个关键节点。"
+      }
+    ],
+    "views": [
+      {
+        "id": "canvas",
+        "label": "流程图画布",
+        "description": "查看 Mermaid 源文件与本地 SVG 预览。",
+        "kind": "diagram",
+        "icon": "Workflow"
+      }
+    ],
+    "actions": [
+      {
+        "id": "create",
+        "label": "新建流程图",
+        "description": "在当前工作区创建 Mermaid 源文件和 SVG 预览。",
+        "handler": "builtin.diagram.create"
+      }
+    ],
+    "tool_adapters": []
+  }
+}

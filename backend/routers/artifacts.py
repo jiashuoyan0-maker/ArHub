@@ -30,6 +30,7 @@ TEXT_SUFFIXES = {
     ".txt",
     ".md",
     ".markdown",
+    ".mmd",
     ".py",
     ".js",
     ".ts",

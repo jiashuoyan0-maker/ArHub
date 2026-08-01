@@ -2,6 +2,7 @@
 from __future__ import annotations
 import asyncio
 import logging
+import re
 import sys
 from contextlib import asynccontextmanager
 from pathlib import Path
@@ -22,7 +23,7 @@ from fastapi.responses import FileResponse
 from config import API_PORT, APPDATA_DIR, FRONTEND_DIST, IS_DESKTOP
 from services.state_store import init_db
 from services.workflow_engine import set_broadcast
-from routers import workflows, artifacts, checkpoints, ws, settings, editor
+from routers import workflows, artifacts, checkpoints, ws, settings, editor, extensions
 from routers import docx_export as docx_export_router
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(name)s %(levelname)s %(message)s")
@@ -155,6 +156,8 @@ _extension_registry = ExtensionRegistry(
     user_dir=APPDATA_DIR / "extensions",
     schema_path=_APP_ROOT / "extension.schema.json",
 )
+extensions.configure(_extension_registry)
+app.include_router(extensions.router)
 
 
 @app.get("/api/extensions/registry")
@@ -186,16 +189,30 @@ async def get_templates():
 
 
 # --- 桌面模式：托管前端静态文件 ---
+_IMMUTABLE_ASSET = re.compile(r"^(?:index-[\w-]+\.(?:js|css)|KaTeX_[\w.-]+\.(?:woff2|woff|ttf))$")
+
+
+class FrontendStaticFiles(StaticFiles):
+    """内容哈希资源长缓存；无哈希的 overlay 资源走 ETag 协商（304 可复用缓存体和 V8 code cache）。"""
+
+    async def get_response(self, path: str, scope):
+        response = await super().get_response(path, scope)
+        response.headers["Cache-Control"] = (
+            "public, max-age=31536000, immutable" if _IMMUTABLE_ASSET.match(path) else "no-cache"
+        )
+        return response
+
+
 if IS_DESKTOP and FRONTEND_DIST.is_dir():
     # 静态资源（js/css/images）
-    app.mount("/assets", StaticFiles(directory=str(FRONTEND_DIST / "assets")), name="static-assets")
+    app.mount("/assets", FrontendStaticFiles(directory=str(FRONTEND_DIST / "assets")), name="static-assets")
 
     # logo 等 public 文件
     @app.get("/logo.svg")
     async def serve_logo():
         logo = FRONTEND_DIST / "logo.svg"
         if logo.exists():
-            return FileResponse(str(logo), media_type="image/svg+xml")
+            return FileResponse(str(logo), media_type="image/svg+xml", headers={"Cache-Control": "no-cache"})
 
     # SPA fallback：所有非 /api /ws 路径返回 index.html
     @app.get("/{full_path:path}")
@@ -203,6 +220,6 @@ if IS_DESKTOP and FRONTEND_DIST.is_dir():
         # 先检查是否是静态文件
         static_file = FRONTEND_DIST / full_path
         if static_file.is_file() and not full_path.startswith("api") and not full_path.startswith("ws"):
-            return FileResponse(str(static_file))
+            return FileResponse(str(static_file), headers={"Cache-Control": "no-cache"})
         # 否则返回 index.html（SPA 路由）
-        return FileResponse(str(FRONTEND_DIST / "index.html"))
+        return FileResponse(str(FRONTEND_DIST / "index.html"), headers={"Cache-Control": "no-cache"})

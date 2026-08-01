@@ -85,6 +85,9 @@ module.exports = {
     '!**/*.py[co]',
     '!**/*.log',
     '!tools/**/node_modules/**',
+    // Chromium 只会下载 woff2；ttf/woff 是编译产物里的冗余 fallback，打包排除即可。
+    '!dist/assets/KaTeX_*.ttf',
+    '!dist/assets/KaTeX_*.woff',
   ],
   extraFiles: [
     {

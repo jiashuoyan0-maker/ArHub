@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <title>ArHub</title>
+    <style>
+      :root {
+        color-scheme: light dark;
+      }
+      html {
+        height: 100%;
+      }
+      body {
+        margin: 0;
+        height: 100%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: #101216;
+        color: rgba(235, 235, 245, 0.72);
+        font-family: -apple-system, "Segoe UI", "Microsoft YaHei", sans-serif;
+      }
+      @media (prefers-color-scheme: light) {
+        body {
+          background: #f4f5f7;
+          color: rgba(28, 33, 42, 0.72);
+        }
+      }
+      .wrap {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 18px;
+      }
+      .wrap img {
+        width: 64px;
+        height: 64px;
+      }
+      .label {
+        font-size: 14px;
+        letter-spacing: 0.02em;
+      }
+      .dots::after {
+        content: "";
+        animation: dots 1.4s steps(4, end) infinite;
+      }
+      @keyframes dots {
+        0% { content: ""; }
+        25% { content: "."; }
+        50% { content: ".."; }
+        75% { content: "..."; }
+      }
+      @media (prefers-reduced-motion: reduce) {
+        .dots::after {
+          content: "…";
+          animation: none;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="wrap">
+      <img src="logo.svg" alt="" />
+      <div class="label">ArHub 正在启动<span class="dots"></span></div>
+    </div>
+  </body>
+</html>

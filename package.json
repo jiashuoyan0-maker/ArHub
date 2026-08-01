@@ -27,7 +27,8 @@
   ],
   "scripts": {
     "start": "electron .",
-    "check:js": "node --check main.js && node --check preload.js && node --check updater.js && node --check dist/assets/arhub-workspace.js && node --check dist/assets/arhub-codex-shell.js",
+    "build:icons": "node scripts/build-icon-subset.cjs",
+    "check:js": "node --check main.js && node --check preload.js && node --check updater.js && node --check scripts/build-icon-subset.cjs && node --check dist/assets/arhub-icons.js && node --check dist/assets/arhub-dom-contract.js && node --check dist/assets/arhub-workspace.js && node --check dist/assets/arhub-codex-shell.js && node --check dist/assets/arhub-codex-desktop.js && node --check dist/assets/arhub-editor-studio.js && node --check dist/assets/arhub-studio-shell.js",
     "check:python": "python -B -X utf8 scripts/check-python-syntax.py",
     "test:node": "node scripts/run-node-tests.cjs",
     "test:signing": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/test-signing-trust.ps1",
@@ -57,6 +58,7 @@
   "devDependencies": {
     "7zip-bin": "5.2.0",
     "electron": "43.2.0",
-    "electron-builder": "26.15.3"
+    "electron-builder": "26.15.3",
+    "lucide": "1.28.0"
   }
 }

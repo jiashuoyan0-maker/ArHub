@@ -8,6 +8,7 @@ ArHub 的 MIT License 而改变。
 | Noto Sans SC / Source Han Sans | skills/shared-scripts/NotoSansSC-Regular.ttf | SIL Open Font License 1.1 |
 | Ubuntu Mono | 多个 skills/comp-paper-*/templates/*/fonts/ 目录 | Ubuntu Font Licence 1.0 |
 | KaTeX fonts | dist/assets/KaTeX_* | SIL Open Font License 1.1 |
+| Lucide Icons 1.28.0（离线子集） | dist/assets/arhub-icons.js | ISC；部分 Feather 衍生图标为 MIT |
 | React 及前端依赖 | dist/assets/index-*.js | 各上游软件包许可证 |
 | Electron 与 Chromium | Windows 桌面外壳 | MIT、BSD 及 Chromium 第三方许可证 |
 | CPython 与 Python 软件包 | `runtime/python` | PSF License 及各软件包上游许可证 |
@@ -25,6 +26,7 @@ Adobe 及其贡献者版权，Ubuntu Mono 为 Canonical Ltd. 版权。完整归�
 
 - [SIL Open Font License 1.1](licenses/OFL-1.1.txt)
 - [Ubuntu Font Licence 1.0](licenses/UBUNTU-FONT-LICENCE-1.0.txt)
+- [Lucide ISC / Feather MIT](licenses/LUCIDE-ISC.txt)
 
 `dist/` 是恢复的生产构建产物，尚未恢复原始前端依赖锁文件。每个 Windows
 Release 会附带 Node 与 Python CycloneDX SBOM；runtime 的精确版本和 Python

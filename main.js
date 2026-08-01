@@ -487,10 +487,14 @@ function createWindow() {
     });
   }
 
-  // 禁用缓存，确保每次加载最新的前端文件
-  mainWindow.webContents.session.clearCache();
+  // 缓存策略由后端 Cache-Control 控制（无哈希资源 no-cache 协商 + 304）。
+  // 不要恢复 clearCache()：它会连 V8 code cache 一起清掉，每次启动都重新编译 1.2MB 的主 bundle。
 
-  mainWindow.loadURL(`http://127.0.0.1:${actualPort}`);
+  // 后端就绪前先显示 splash，whenReady 流程在健康检查通过后再 loadURL 换真页面。
+  // 冒烟测试直接等真实前端，避免 splash 的 did-finish-load 误报成功。
+  if (!IS_SMOKE_TEST) {
+    mainWindow.loadFile(path.join(__dirname, 'dist', 'splash.html'));
+  }
 
   // 外部链接用系统浏览器打开
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {
@@ -575,14 +579,6 @@ app.on('ready', async () => {
     return;
   }
 
-  // 首次启动：自动安装 MiKTeX（如果系统上没有）
-  try {
-    await ensureMiKTeX();
-  } catch (e) {
-    console.error('[MiKTeX] Setup error:', e.message);
-    // 不阻塞启动，编译功能可能不可用但其他功能正常
-  }
-
   try {
     // 自动选择可用端口（避免端口占用导致启动失败）
     actualPort = await findAvailablePort(PORT);
@@ -592,10 +588,24 @@ app.on('ready', async () => {
       console.log(`[Port] Using port ${actualPort}`);
     }
 
+    // 先建窗口显示 splash：Chromium 预热与 MiKTeX 检查、Python 启动并行，
+    // 用户不再对着无窗口的空白等待。
+    createWindow();
+
+    // 首次启动：自动安装 MiKTeX（如果系统上没有）
+    try {
+      await ensureMiKTeX();
+    } catch (e) {
+      console.error('[MiKTeX] Setup error:', e.message);
+      // 不阻塞启动，编译功能可能不可用但其他功能正常
+    }
+
     startBackend();
     await waitForBackend();
     console.log('[App] Backend is ready');
-    createWindow();
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.loadURL(`http://127.0.0.1:${actualPort}`);
+    }
     // 启动 5 秒后静默检查更新
     setTimeout(() => initUpdater().catch(e => console.error('[Updater] init failed:', e)), 5000);
   } catch (err) {

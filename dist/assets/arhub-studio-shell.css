@@ -1,0 +1,1399 @@
+/*
+ * ArHub Studio shell
+ *
+ * This is deliberately loaded after the legacy workspace layers.  It only
+ * affects non-editor routes, so the full-width Agent + contextual preview
+ * editor remains governed by arhub-editor-studio.css.
+ */
+
+html.arhub-studio-shell-active:not(.arhub-editor-studio-active) {
+  --as-sidebar-width: 232px;
+  --as-topbar-height: 52px;
+  --as-canvas: #06040b;
+  --as-panel: rgba(12, 9, 23, 0.7);
+  --as-panel-strong: rgba(10, 8, 18, 0.84);
+  --as-panel-soft: rgba(28, 19, 51, 0.48);
+  --as-panel-hover: rgba(42, 29, 76, 0.62);
+  --as-border: rgba(255, 255, 255, 0.105);
+  --as-border-strong: rgba(255, 255, 255, 0.19);
+  --as-highlight: rgba(255, 255, 255, 0.1);
+  --as-text: #f7f5ff;
+  --as-text-secondary: rgba(241, 237, 255, 0.76);
+  --as-muted: rgba(218, 209, 238, 0.5);
+  --as-purple: #9c7bff;
+  --as-violet: #6d35e6;
+  --as-blue: #65b5ff;
+  --as-green: #56d59a;
+  --as-red: #ff7788;
+  --as-yellow: #ffc776;
+  --as-shadow: 0 20px 60px rgba(0, 0, 0, 0.34), inset 0 1px rgba(255, 255, 255, 0.07);
+  --as-shadow-hover: 0 25px 72px rgba(0, 0, 0, 0.42), inset 0 1px rgba(255, 255, 255, 0.1);
+  color: var(--as-text);
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI", "PingFang SC", "Microsoft YaHei UI", sans-serif;
+}
+
+html[data-theme="light"].arhub-studio-shell-active:not(.arhub-editor-studio-active),
+html.dark[data-theme="light"].arhub-studio-shell-active:not(.arhub-editor-studio-active) {
+  --as-canvas: #f5f3fb;
+  --as-panel: rgba(255, 255, 255, 0.78);
+  --as-panel-strong: rgba(255, 255, 255, 0.9);
+  --as-panel-soft: rgba(246, 243, 255, 0.78);
+  --as-panel-hover: rgba(255, 255, 255, 0.96);
+  --as-border: rgba(52, 35, 94, 0.14);
+  --as-border-strong: rgba(62, 39, 118, 0.26);
+  --as-highlight: rgba(255, 255, 255, 0.94);
+  --as-text: #211a34;
+  --as-text-secondary: #4e4269;
+  --as-muted: #706481;
+  --as-purple: #6544c9;
+  --as-violet: #5d2bc8;
+  --as-blue: #166bb6;
+  --as-green: #18784e;
+  --as-red: #bd3353;
+  --as-yellow: #915400;
+  --as-shadow: 0 12px 28px rgba(61, 41, 111, 0.08), 0 2px 6px rgba(61, 41, 111, 0.045), inset 0 1px rgba(255, 255, 255, 0.9);
+  --as-shadow-hover: 0 17px 38px rgba(61, 41, 111, 0.12), 0 3px 8px rgba(61, 41, 111, 0.055), inset 0 1px rgba(255, 255, 255, 0.96);
+}
+
+html.arhub-studio-shell-active:not(.arhub-editor-studio-active),
+html.arhub-studio-shell-active:not(.arhub-editor-studio-active) body {
+  min-height: 100%;
+  color: var(--as-text) !important;
+  background-color: var(--as-canvas) !important;
+  background-image:
+    linear-gradient(126deg, rgba(70, 27, 152, 0.6) 0%, rgba(66, 20, 145, 0.48) 24%, transparent 43%),
+    radial-gradient(86% 42% at 61% -8%, rgba(112, 53, 231, 0.46) 0%, rgba(56, 21, 132, 0.2) 44%, transparent 73%),
+    linear-gradient(204deg, transparent 0%, rgba(55, 21, 106, 0.2) 37%, rgba(6, 4, 11, 0) 67%),
+    linear-gradient(180deg, #0b0715 0%, #05040a 58%, #07050c 100%) !important;
+  background-attachment: fixed !important;
+}
+
+html[data-theme="light"].arhub-studio-shell-active:not(.arhub-editor-studio-active) body {
+  background-image:
+    linear-gradient(126deg, rgba(159, 118, 255, 0.24) 0%, rgba(133, 91, 230, 0.18) 25%, transparent 46%),
+    radial-gradient(82% 40% at 61% -9%, rgba(148, 113, 255, 0.24) 0%, rgba(210, 192, 255, 0.19) 48%, transparent 75%),
+    linear-gradient(203deg, transparent 0%, rgba(120, 87, 219, 0.08) 37%, rgba(245, 243, 251, 0) 67%),
+    linear-gradient(180deg, #f8f7fd 0%, #f3f1fa 61%, #f8f6fc 100%) !important;
+}
+
+html.arhub-studio-shell-active:not(.arhub-editor-studio-active) body::before {
+  position: fixed;
+  z-index: -1;
+  inset: 0;
+  content: "";
+  pointer-events: none;
+  background:
+    linear-gradient(116deg, transparent 0 15%, rgba(133, 77, 255, 0.13) 30%, transparent 47%),
+    linear-gradient(298deg, transparent 0 43%, rgba(71, 126, 255, 0.07) 68%, transparent 100%);
+}
+
+html.arhub-studio-shell-active:not(.arhub-editor-studio-active) .bg-grid,
+html.arhub-studio-shell-active:not(.arhub-editor-studio-active) #root > div {
+  background-image: none !important;
+}
+
+html.arhub-studio-shell-active:not(.arhub-editor-studio-active) #root {
+  min-height: 100dvh;
+  margin-left: var(--as-sidebar-width) !important;
+  padding-top: var(--as-topbar-height) !important;
+  transition: margin-left 220ms cubic-bezier(0.2, 0.72, 0.25, 1) !important;
+}
+
+html.arhub-studio-shell-active:not(.arhub-editor-studio-active) body.mw-shell-collapsed #root {
+  margin-left: var(--as-sidebar-width) !important;
+}
+
+/* The non-editor navigation follows the reference's complete, readable rail. */
+
+html.arhub-studio-shell-active:not(.arhub-editor-studio-active) #mw-codex-sidebar,
+html.arhub-studio-shell-active:not(.arhub-editor-studio-active) body.mw-shell-collapsed #mw-codex-sidebar {
+  width: var(--as-sidebar-width) !important;
+  padding: 19px 14px 14px !important;
+  overflow: hidden auto;
+  color: var(--as-text) !important;
+  border-right: 1px solid var(--as-border) !important;
+  background:
+    linear-gradient(180deg, rgba(16, 11, 31, 0.88), rgba(7, 6, 13, 0.74)),
+    var(--as-panel-strong) !important;
+  box-shadow: 10px 0 54px rgba(0, 0, 0, 0.2), inset -1px 0 rgba(255, 255, 255, 0.035) !important;
+  backdrop-filter: blur(34px) saturate(155%) !important;
+  -webkit-backdrop-filter: blur(34px) saturate(155%) !important;
+  transition: width 220ms cubic-bezier(0.2, 0.72, 0.25, 1), transform 220ms cubic-bezier(0.2, 0.72, 0.25, 1) !important;
+}
+
+html[data-theme="light"].arhub-studio-shell-active:not(.arhub-editor-studio-active) #mw-codex-sidebar,
+html[data-theme="light"].arhub-studio-shell-active:not(.arhub-editor-studio-active) body.mw-shell-collapsed #mw-codex-sidebar {
+  background:
+    linear-gradient(180deg, rgba(248, 246, 255, 0.84), rgba(243, 239, 252, 0.74)),
+    var(--as-panel-strong) !important;
+  box-shadow: 10px 0 42px rgba(73, 47, 138, 0.09), inset -1px 0 rgba(255, 255, 255, 0.56) !important;
+}
+
+html.arhub-studio-shell-active:not(.arhub-editor-studio-active) #mw-codex-sidebar::before {
+  position: absolute;
+  inset: 0 0 auto;
+  height: 164px;
+  content: "";
+  pointer-events: none;
+  opacity: 0.78;
+  background: linear-gradient(142deg, rgba(147, 81, 255, 0.28), rgba(74, 27, 175, 0.08) 58%, transparent 82%);
+}
+
+html.arhub-studio-shell-active:not(.arhub-editor-studio-active) .mw-shell-brand-row,
+html.arhub-studio-shell-active:not(.arhub-editor-studio-active) body.mw-shell-collapsed .mw-shell-brand-row {
+  position: relative;
+  display: block !important;
+  min-height: 43px;
+  margin: 0 2px 24px !important;
+}
+
+html.arhub-studio-shell-active:not(.arhub-editor-studio-active) .mw-shell-brand,
+html.arhub-studio-shell-active:not(.arhub-editor-studio-active) body.mw-shell-collapsed .mw-shell-brand {
+  display: flex !important;
+  justify-content: flex-start !important;
+  gap: 10px !important;
+  padding: 3px 0 !important;
+  color: var(--as-text) !important;
+}
+
+html.arhub-studio-shell-active:not(.arhub-editor-studio-active) .mw-shell-brand img {
+  width: 29px !important;
+  height: 29px !important;
+  border: 1px solid rgba(255, 255, 255, 0.26);
+  border-radius: 9px !important;
+  box-shadow: 0 7px 18px rgba(87, 43, 190, 0.31) !important;
+}
+
+html.arhub-studio-shell-active:not(.arhub-editor-studio-active) .mw-shell-brand > span,
+html.arhub-studio-shell-active:not(.arhub-editor-studio-active) body.mw-shell-collapsed .mw-shell-brand > span {
+  display: grid !important;
+}
+
+html.arhub-studio-shell-active:not(.arhub-editor-studio-active) .mw-shell-brand strong {
+  font-size: 19px !important;
+  font-weight: 720 !important;
+  letter-spacing: -0.042em;
+  line-height: 24px !important;
+}
+
+html.arhub-studio-shell-active:not(.arhub-editor-studio-active) .mw-shell-brand small {
+  display: none !important;
+}
+
+html.arhub-studio-shell-active:not(.arhub-editor-studio-active) .mw-shell-collapse {
+  display: none !important;
+}
+
+html.arhub-studio-shell-active:not(.arhub-editor-studio-active) .mw-shell-new-task,
+html.arhub-studio-shell-active:not(.arhub-editor-studio-active) body.mw-shell-collapsed .mw-shell-new-task {
+  display: inline-flex !important;
+  justify-content: flex-start !important;
+  width: calc(100% - 4px);
+  min-height: 40px;
+  gap: 10px !important;
+  margin: 0 2px 21px !important;
+  padding: 0 12px !important;
+  color: var(--as-text) !important;
+  border: 1px solid var(--as-border) !important;
+  border-radius: 12px !important;
+  background: linear-gradient(145deg, rgba(255, 255, 255, 0.12), rgba(255, 255, 255, 0.035)) !important;
+  box-shadow: inset 0 1px rgba(255, 255, 255, 0.1) !important;
+}
+
+html.arhub-studio-shell-active:not(.arhub-editor-studio-active) .mw-shell-new-task:hover {
+  border-color: rgba(207, 189, 255, 0.44) !important;
+  background: linear-gradient(145deg, rgba(150, 103, 255, 0.42), rgba(99, 56, 212, 0.22)) !important;
+  box-shadow: 0 10px 24px rgba(81, 39, 181, 0.22), inset 0 1px rgba(255, 255, 255, 0.14) !important;
+  filter: none !important;
+  transform: translateY(-1px);
+}
+
+html.arhub-studio-shell-active:not(.arhub-editor-studio-active) .mw-shell-new-task > span,
+html.arhub-studio-shell-active:not(.arhub-editor-studio-active) body.mw-shell-collapsed .mw-shell-new-task > span {
+  display: inline !important;
+  font-size: 13px;
+  font-weight: 620;
+}
+
+html.arhub-studio-shell-active:not(.arhub-editor-studio-active) .mw-shell-primary {
+  position: relative;
+  display: grid;
+  gap: 4px;
+  margin: 0 2px;
+  padding-top: 23px;
+}
+
+html.arhub-studio-shell-active:not(.arhub-editor-studio-active) .mw-shell-primary::before {
+  position: absolute;
+  top: 0;
+  left: 10px;
+  content: "工作区";
+  color: var(--as-muted);
+  font-size: 10px;
+  font-weight: 680;
+  letter-spacing: 0.13em;
+}
+
+html.arhub-studio-shell-active:not(.arhub-editor-studio-active) .mw-shell-nav-link,
+html.arhub-studio-shell-active:not(.arhub-editor-studio-active) body.mw-shell-collapsed .mw-shell-nav-link {
+  display: flex !important;
+  justify-content: flex-start !important;
+  min-height: 43px;
+  gap: 12px !important;
+  padding: 0 11px !important;
+  color: var(--as-text-secondary) !important;
+  border: 1px solid transparent !important;
+  border-radius: 11px !important;
+  background: transparent !important;
+  font-size: 14px;
+  font-weight: 560;
+  letter-spacing: -0.01em;
+  transition: color 180ms ease, background-color 180ms ease, border-color 180ms ease, transform 180ms ease !important;
+}
+
+html.arhub-studio-shell-active:not(.arhub-editor-studio-active) .mw-shell-nav-link > span,
+html.arhub-studio-shell-active:not(.arhub-editor-studio-active) body.mw-shell-collapsed .mw-shell-nav-link > span {
+  display: inline !important;
+}
+
+html.arhub-studio-shell-active:not(.arhub-editor-studio-active) .mw-shell-nav-link svg {
+  width: 18px;
+  height: 18px;
+  stroke-width: 1.65;
+}
+
+html.arhub-studio-shell-active:not(.arhub-editor-studio-active) .mw-shell-nav-link:hover {
+  color: var(--as-text) !important;
+  background: rgba(255, 255, 255, 0.075) !important;
+  transform: translateX(1px);
+}
+
+html.arhub-studio-shell-active:not(.arhub-editor-studio-active) .mw-shell-nav-link.is-active {
+  color: #100d18 !important;
+  border-color: rgba(255, 255, 255, 0.88) !important;
+  background: linear-gradient(180deg, #ffffff 0%, #efedf6 100%) !important;
+  box-shadow: 0 9px 21px rgba(0, 0, 0, 0.15), inset 0 1px #ffffff !important;
+}
+
+html[data-theme="light"].arhub-studio-shell-active:not(.arhub-editor-studio-active) .mw-shell-nav-link.is-active {
+  color: #21183b !important;
+  border-color: rgba(255, 255, 255, 0.94) !important;
+  box-shadow: 0 9px 22px rgba(72, 48, 141, 0.12), inset 0 1px #ffffff !important;
+}
+
+html.arhub-studio-shell-active:not(.arhub-editor-studio-active) .mw-shell-recent {
+  display: flex !important;
+  margin: 27px 2px 0 !important;
+  padding-top: 20px;
+  border-top: 1px solid rgba(255, 255, 255, 0.075);
+}
+
+html.arhub-studio-shell-active:not(.arhub-editor-studio-active) .mw-shell-recent > header,
+html.arhub-studio-shell-active:not(.arhub-editor-studio-active) body.mw-shell-collapsed .mw-shell-recent > header {
+  display: flex !important;
+  min-height: 26px;
+  padding: 0 9px;
+}
+
+html.arhub-studio-shell-active:not(.arhub-editor-studio-active) .mw-shell-recent > header > span,
+html.arhub-studio-shell-active:not(.arhub-editor-studio-active) body.mw-shell-collapsed .mw-shell-recent > header > span {
+  display: inline !important;
+  color: var(--as-muted);
+  font-size: 10px;
+  font-weight: 680;
+  letter-spacing: 0.13em;
+}
+
+html.arhub-studio-shell-active:not(.arhub-editor-studio-active) .mw-shell-refresh {
+  opacity: 0.7 !important;
+  color: var(--as-muted) !important;
+}
+
+html.arhub-studio-shell-active:not(.arhub-editor-studio-active) .mw-shell-task,
+html.arhub-studio-shell-active:not(.arhub-editor-studio-active) body.mw-shell-collapsed .mw-shell-task {
+  display: grid !important;
+  grid-template-columns: 8px minmax(0, 1fr) !important;
+  justify-content: initial !important;
+  min-height: 48px !important;
+  padding: 8px 9px !important;
+  color: var(--as-text-secondary) !important;
+  border: 1px solid transparent !important;
+  border-radius: 10px !important;
+  background: transparent !important;
+}
+
+html.arhub-studio-shell-active:not(.arhub-editor-studio-active) .mw-shell-task:hover,
+html.arhub-studio-shell-active:not(.arhub-editor-studio-active) .mw-shell-task.is-active {
+  color: var(--as-text) !important;
+  border-color: var(--as-border) !important;
+  background: rgba(255, 255, 255, 0.06) !important;
+}
+
+html.arhub-studio-shell-active:not(.arhub-editor-studio-active) .mw-shell-task-text,
+html.arhub-studio-shell-active:not(.arhub-editor-studio-active) body.mw-shell-collapsed .mw-shell-task-text {
+  display: grid !important;
+}
+
+html.arhub-studio-shell-active:not(.arhub-editor-studio-active) .mw-shell-task-text strong {
+  color: inherit;
+  font-size: 12px !important;
+  font-weight: 570 !important;
+}
+
+html.arhub-studio-shell-active:not(.arhub-editor-studio-active) .mw-shell-task-text span {
+  color: var(--as-muted) !important;
+  font-size: 10px !important;
+}
+
+html.arhub-studio-shell-active:not(.arhub-editor-studio-active) .mw-shell-sidebar-footer {
+  margin: 16px 2px 0 !important;
+  padding-top: 12px;
+  border-top: 1px solid rgba(255, 255, 255, 0.075);
+}
+
+/* Integrated window chrome, retained for theme and local-service controls. */
+
+html.arhub-studio-shell-active:not(.arhub-editor-studio-active) #mw-codex-topbar,
+html.arhub-studio-shell-active:not(.arhub-editor-studio-active) body.mw-shell-collapsed #mw-codex-topbar {
+  left: var(--as-sidebar-width) !important;
+  height: var(--as-topbar-height) !important;
+  padding: 0 23px 0 27px !important;
+  color: var(--as-text) !important;
+  border-bottom: 1px solid var(--as-border) !important;
+  background: rgba(9, 6, 17, 0.35) !important;
+  box-shadow: inset 0 -1px rgba(255, 255, 255, 0.025) !important;
+  backdrop-filter: blur(28px) saturate(145%) !important;
+  -webkit-backdrop-filter: blur(28px) saturate(145%) !important;
+}
+
+html[data-theme="light"].arhub-studio-shell-active:not(.arhub-editor-studio-active) #mw-codex-topbar,
+html[data-theme="light"].arhub-studio-shell-active:not(.arhub-editor-studio-active) body.mw-shell-collapsed #mw-codex-topbar {
+  background: rgba(247, 245, 253, 0.54) !important;
+}
+
+html.arhub-studio-shell-active:not(.arhub-editor-studio-active) .mw-shell-route-title {
+  gap: 4px;
+}
+
+html.arhub-studio-shell-active:not(.arhub-editor-studio-active) #mw-shell-eyebrow {
+  color: var(--as-muted) !important;
+  font-size: 10px !important;
+  font-weight: 650;
+  letter-spacing: 0.1em;
+}
+
+html.arhub-studio-shell-active:not(.arhub-editor-studio-active) #mw-shell-title {
+  color: var(--as-text-secondary) !important;
+  font-size: 12px !important;
+  font-weight: 620 !important;
+}
+
+html.arhub-studio-shell-active:not(.arhub-editor-studio-active) .mw-shell-theme-toggle,
+html.arhub-studio-shell-active:not(.arhub-editor-studio-active) .mw-shell-local-status {
+  border-color: var(--as-border) !important;
+  background: rgba(255, 255, 255, 0.05) !important;
+}
+
+html.arhub-studio-shell-active:not(.arhub-editor-studio-active) .mw-shell-theme-toggle:hover {
+  color: var(--as-text) !important;
+  border-color: var(--as-border-strong) !important;
+  background: rgba(255, 255, 255, 0.1) !important;
+}
+
+/* Page structure and material. */
+
+html.arhub-studio-shell-active:not(.arhub-editor-studio-active) main {
+  width: min(100%, 1368px) !important;
+  max-width: none !important;
+  margin: 0 auto !important;
+  padding: 48px 56px 72px !important;
+  color: var(--as-text) !important;
+}
+
+html.arhub-studio-shell-active:not(.arhub-editor-studio-active) main h1 {
+  color: var(--as-text) !important;
+  font-size: clamp(28px, 2.45vw, 38px) !important;
+  font-weight: 730 !important;
+  letter-spacing: -0.052em !important;
+  line-height: 1.12 !important;
+}
+
+html.arhub-studio-shell-active:not(.arhub-editor-studio-active)[data-arhub-studio-view="workflow"] main h1,
+html.arhub-studio-shell-active:not(.arhub-editor-studio-active)[data-arhub-studio-view="artifact"] main h1 {
+  max-width: 860px;
+  font-size: clamp(25px, 2.25vw, 34px) !important;
+}
+
+html.arhub-studio-shell-active:not(.arhub-editor-studio-active) main h2,
+html.arhub-studio-shell-active:not(.arhub-editor-studio-active) main h3 {
+  color: var(--as-text) !important;
+  font-weight: 680 !important;
+  letter-spacing: -0.026em;
+}
+
+html.arhub-studio-shell-active:not(.arhub-editor-studio-active) main p {
+  color: var(--as-text-secondary);
+}
+
+html.arhub-studio-shell-active:not(.arhub-editor-studio-active) .arhub-studio-kicker {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 24px;
+  margin-bottom: 9px;
+  padding: 0 10px;
+  color: rgba(239, 232, 255, 0.85);
+  border: 1px solid rgba(206, 184, 255, 0.22);
+  border-radius: 999px;
+  background: rgba(119, 75, 224, 0.18);
+  box-shadow: inset 0 1px rgba(255, 255, 255, 0.09);
+  font-size: 10px;
+  font-weight: 710;
+  letter-spacing: 0.12em;
+  line-height: 1;
+}
+
+html[data-theme="light"].arhub-studio-shell-active:not(.arhub-editor-studio-active) .arhub-studio-kicker {
+  color: #5630b3;
+  border-color: rgba(102, 63, 195, 0.18);
+  background: rgba(150, 111, 242, 0.12);
+}
+
+html.arhub-studio-shell-active:not(.arhub-editor-studio-active) main .card,
+html.arhub-studio-shell-active:not(.arhub-editor-studio-active) main [role="dialog"] .card {
+  color: var(--as-text-secondary) !important;
+  border: 1px solid var(--as-border) !important;
+  border-radius: 16px !important;
+  background:
+    linear-gradient(142deg, rgba(255, 255, 255, 0.075), transparent 42%),
+    var(--as-panel) !important;
+  box-shadow: var(--as-shadow) !important;
+  backdrop-filter: blur(30px) saturate(148%) contrast(102%) !important;
+  -webkit-backdrop-filter: blur(30px) saturate(148%) contrast(102%) !important;
+  transition: transform 210ms cubic-bezier(0.2, 0.72, 0.25, 1), border-color 210ms ease, box-shadow 210ms ease, background-color 210ms ease !important;
+}
+
+html.arhub-studio-shell-active:not(.arhub-editor-studio-active) main .card:hover {
+  border-color: var(--as-border-strong) !important;
+  box-shadow: var(--as-shadow-hover) !important;
+}
+
+html.arhub-studio-shell-active:not(.arhub-editor-studio-active) main a:not(.mw-shell-nav-link):not(.mw-shell-task):not(.mw-shell-brand) {
+  color: inherit;
+}
+
+html.arhub-studio-shell-active:not(.arhub-editor-studio-active) main button,
+html.arhub-studio-shell-active:not(.arhub-editor-studio-active) main input,
+html.arhub-studio-shell-active:not(.arhub-editor-studio-active) main textarea,
+html.arhub-studio-shell-active:not(.arhub-editor-studio-active) main select {
+  font-family: inherit !important;
+}
+
+html.arhub-studio-shell-active:not(.arhub-editor-studio-active) main button:focus-visible,
+html.arhub-studio-shell-active:not(.arhub-editor-studio-active) main a:focus-visible,
+html.arhub-studio-shell-active:not(.arhub-editor-studio-active) main input:focus-visible,
+html.arhub-studio-shell-active:not(.arhub-editor-studio-active) main textarea:focus-visible,
+html.arhub-studio-shell-active:not(.arhub-editor-studio-active) main select:focus-visible {
+  outline: 3px solid rgba(151, 113, 255, 0.38) !important;
+  outline-offset: 2px;
+}
+
+/* Buttons and actions are compact, physical controls rather than flat labels. */
+
+html.arhub-studio-shell-active:not(.arhub-editor-studio-active) main .btn-primary,
+html.arhub-studio-shell-active:not(.arhub-editor-studio-active) main .arhub-studio-action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  min-height: 36px;
+  color: var(--as-text) !important;
+  border: 1px solid var(--as-border) !important;
+  border-radius: 10px !important;
+  background: rgba(255, 255, 255, 0.065) !important;
+  box-shadow: inset 0 1px rgba(255, 255, 255, 0.08) !important;
+  font-size: 12px !important;
+  font-weight: 620 !important;
+  transition: transform 180ms ease, color 180ms ease, border-color 180ms ease, background-color 180ms ease, box-shadow 180ms ease !important;
+}
+
+html.arhub-studio-shell-active:not(.arhub-editor-studio-active) main .btn-primary {
+  color: #17111f !important;
+  border-color: rgba(255, 255, 255, 0.88) !important;
+  background: linear-gradient(180deg, #ffffff, #edeaf7) !important;
+  box-shadow: 0 10px 22px rgba(0, 0, 0, 0.16), inset 0 1px #ffffff !important;
+}
+
+html.arhub-studio-shell-active:not(.arhub-editor-studio-active) main .btn-primary:hover,
+html.arhub-studio-shell-active:not(.arhub-editor-studio-active) main .arhub-studio-action:hover {
+  border-color: rgba(208, 186, 255, 0.42) !important;
+  background: rgba(152, 100, 255, 0.19) !important;
+  box-shadow: 0 9px 22px rgba(53, 20, 125, 0.2), inset 0 1px rgba(255, 255, 255, 0.13) !important;
+  transform: translateY(-1px);
+}
+
+html.arhub-studio-shell-active:not(.arhub-editor-studio-active) main .btn-primary:hover {
+  color: #17111f !important;
+  background: linear-gradient(180deg, #ffffff, #e8e3f7) !important;
+}
+
+html.arhub-studio-shell-active:not(.arhub-editor-studio-active) main .arhub-studio-action-icon,
+html.arhub-studio-shell-active:not(.arhub-editor-studio-active) main .arhub-studio-inline-link-icon {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+}
+
+html.arhub-studio-shell-active:not(.arhub-editor-studio-active) main .arhub-studio-action-icon svg,
+html.arhub-studio-shell-active:not(.arhub-editor-studio-active) main .arhub-studio-inline-link-icon svg {
+  stroke-width: 1.85;
+}
+
+/* Workflow dashboard. */
+
+html.arhub-studio-shell-active:not(.arhub-editor-studio-active)[data-arhub-studio-view="workflows"] main .animate-fade-in > .flex.items-end.justify-between {
+  align-items: end !important;
+  gap: 24px;
+  margin-bottom: 30px !important;
+}
+
+html.arhub-studio-shell-active:not(.arhub-editor-studio-active)[data-arhub-studio-view="workflows"] main .flex.gap-1.mb-6 {
+  gap: 3px !important;
+  margin-bottom: 24px !important;
+  padding: 4px !important;
+  overflow: auto hidden;
+  border: 1px solid var(--as-border) !important;
+  border-radius: 13px !important;
+  background: rgba(7, 5, 13, 0.37) !important;
+  box-shadow: inset 0 1px rgba(255, 255, 255, 0.05) !important;
+  backdrop-filter: blur(18px) saturate(140%) !important;
+  -webkit-backdrop-filter: blur(18px) saturate(140%) !important;
+}
+
+html.arhub-studio-shell-active:not(.arhub-editor-studio-active)[data-arhub-studio-view="workflows"] main .flex.gap-1.mb-6 button {
+  min-height: 34px;
+  padding: 0 13px !important;
+  color: var(--as-muted) !important;
+  border: 1px solid transparent !important;
+  border-radius: 9px !important;
+  background: transparent !important;
+  font-size: 12px !important;
+  font-weight: 600 !important;
+  white-space: nowrap;
+}
+
+html.arhub-studio-shell-active:not(.arhub-editor-studio-active)[data-arhub-studio-view="workflows"] main .flex.gap-1.mb-6 button:hover {
+  color: var(--as-text) !important;
+  background: rgba(255, 255, 255, 0.07) !important;
+}
+
+html.arhub-studio-shell-active:not(.arhub-editor-studio-active)[data-arhub-studio-view="workflows"] main .flex.gap-1.mb-6 button[class*="bg"],
+html.arhub-studio-shell-active:not(.arhub-editor-studio-active)[data-arhub-studio-view="workflows"] main .flex.gap-1.mb-6 button[aria-pressed="true"] {
+  color: #17111f !important;
+  border-color: rgba(255, 255, 255, 0.9) !important;
+  background: linear-gradient(180deg, #fff, #edeaf6) !important;
+  box-shadow: 0 5px 13px rgba(0, 0, 0, 0.16), inset 0 1px #fff !important;
+}
+
+html.arhub-studio-shell-active:not(.arhub-editor-studio-active) .arhub-studio-stat-grid {
+  gap: 0 !important;
+  overflow: hidden;
+  border: 1px solid var(--as-border) !important;
+  border-radius: 16px;
+  background:
+    linear-gradient(140deg, rgba(255, 255, 255, 0.065), transparent 42%),
+    rgba(12, 8, 24, 0.56) !important;
+  box-shadow: var(--as-shadow), inset 0 1px rgba(255, 255, 255, 0.06) !important;
+  backdrop-filter: blur(26px) saturate(145%) !important;
+  -webkit-backdrop-filter: blur(26px) saturate(145%) !important;
+}
+
+html.arhub-studio-shell-active:not(.arhub-editor-studio-active) .arhub-studio-stat {
+  position: relative;
+  min-height: 104px;
+  padding: 22px 20px 17px 53px !important;
+  border-right: 1px solid var(--as-border);
+  background: transparent !important;
+}
+
+html.arhub-studio-shell-active:not(.arhub-editor-studio-active) .arhub-studio-stat:last-child {
+  border-right: 0;
+}
+
+html.arhub-studio-shell-active:not(.arhub-editor-studio-active) .arhub-studio-stat-icon {
+  position: absolute;
+  top: 21px;
+  left: 19px;
+  display: flex;
+  width: 23px;
+  height: 23px;
+  align-items: center;
+  justify-content: center;
+  color: var(--as-purple);
+  border: 1px solid rgba(178, 148, 255, 0.18);
+  border-radius: 8px;
+  background: rgba(133, 85, 238, 0.14);
+}
+
+html.arhub-studio-shell-active:not(.arhub-editor-studio-active) .arhub-studio-stat:nth-child(2) .arhub-studio-stat-icon {
+  color: var(--as-yellow);
+  border-color: rgba(255, 190, 94, 0.18);
+  background: rgba(255, 180, 77, 0.1);
+}
+
+html.arhub-studio-shell-active:not(.arhub-editor-studio-active) .arhub-studio-stat:nth-child(3) .arhub-studio-stat-icon {
+  color: var(--as-green);
+  border-color: rgba(93, 226, 160, 0.17);
+  background: rgba(65, 211, 139, 0.1);
+}
+
+html.arhub-studio-shell-active:not(.arhub-editor-studio-active) .arhub-studio-stat:nth-child(4) .arhub-studio-stat-icon {
+  color: var(--as-red);
+  border-color: rgba(255, 119, 136, 0.17);
+  background: rgba(255, 93, 119, 0.1);
+}
+
+html.arhub-studio-shell-active:not(.arhub-editor-studio-active) .arhub-studio-stat p:first-of-type {
+  color: var(--as-muted) !important;
+  font-size: 11px !important;
+  font-weight: 620 !important;
+  letter-spacing: 0.045em;
+}
+
+html.arhub-studio-shell-active:not(.arhub-editor-studio-active) .arhub-studio-stat p:last-of-type {
+  margin-top: 7px;
+  color: var(--as-text) !important;
+  font-size: 27px !important;
+  font-weight: 720 !important;
+  letter-spacing: -0.05em;
+}
+
+html.arhub-studio-shell-active:not(.arhub-editor-studio-active)[data-arhub-studio-view="workflows"] main .flex.items-center.gap-3.px-4.py-2 {
+  padding: 0 17px 10px !important;
+  color: var(--as-muted) !important;
+  font-size: 10px !important;
+  letter-spacing: 0.11em !important;
+}
+
+html.arhub-studio-shell-active:not(.arhub-editor-studio-active) .arhub-studio-workflow-row {
+  min-height: 71px;
+  padding: 13px 17px !important;
+  border-radius: 14px !important;
+  background:
+    linear-gradient(127deg, rgba(255, 255, 255, 0.055), transparent 42%),
+    rgba(12, 8, 23, 0.56) !important;
+}
+
+html.arhub-studio-shell-active:not(.arhub-editor-studio-active) .arhub-studio-workflow-row:hover {
+  transform: translateY(-1px);
+}
+
+html.arhub-studio-shell-active:not(.arhub-editor-studio-active) .arhub-studio-workflow-title {
+  display: grid !important;
+  grid-template-columns: 31px minmax(0, 1fr);
+  grid-template-rows: auto auto;
+  column-gap: 10px;
+  align-items: center;
+  color: var(--as-text) !important;
+}
+
+html.arhub-studio-shell-active:not(.arhub-editor-studio-active) .arhub-studio-workflow-icon {
+  grid-row: 1 / span 2;
+  display: inline-flex;
+  width: 29px;
+  height: 29px;
+  align-items: center;
+  justify-content: center;
+  color: #e9e2ff;
+  border: 1px solid rgba(185, 153, 255, 0.2);
+  border-radius: 9px;
+  background: linear-gradient(145deg, rgba(154, 100, 255, 0.31), rgba(84, 43, 188, 0.18));
+}
+
+html.arhub-studio-shell-active:not(.arhub-editor-studio-active) .arhub-studio-workflow-title p:first-of-type {
+  color: var(--as-text) !important;
+  font-weight: 640 !important;
+}
+
+html.arhub-studio-shell-active:not(.arhub-editor-studio-active) .arhub-studio-workflow-title p:last-of-type {
+  color: var(--as-muted) !important;
+  font-size: 11px !important;
+}
+
+/* Workflow detail: readable step list, live output and artifact library. */
+
+html.arhub-studio-shell-active:not(.arhub-editor-studio-active)[data-arhub-studio-view="workflow"] main > div > .grid.grid-cols-1,
+html.arhub-studio-shell-active:not(.arhub-editor-studio-active)[data-arhub-studio-view="artifact"] main > div > .grid.grid-cols-1 {
+  align-items: start;
+}
+
+html.arhub-studio-shell-active:not(.arhub-editor-studio-active) .arhub-studio-pipeline {
+  padding: 15px !important;
+  border: 1px solid var(--as-border);
+  border-radius: 16px;
+  background: rgba(11, 8, 21, 0.48);
+  box-shadow: inset 0 1px rgba(255, 255, 255, 0.05);
+  backdrop-filter: blur(22px) saturate(138%);
+  -webkit-backdrop-filter: blur(22px) saturate(138%);
+}
+
+html.arhub-studio-shell-active:not(.arhub-editor-studio-active) .arhub-studio-pipeline > p:first-child {
+  padding: 1px 5px 12px;
+  color: var(--as-text) !important;
+  font-size: 13px !important;
+  font-weight: 680 !important;
+}
+
+html.arhub-studio-shell-active:not(.arhub-editor-studio-active) .arhub-studio-step-row {
+  position: relative;
+  padding: 3px 0;
+}
+
+html.arhub-studio-shell-active:not(.arhub-editor-studio-active) .arhub-studio-step-row::before {
+  position: absolute;
+  top: 49px;
+  bottom: -6px;
+  left: 19px;
+  width: 1px;
+  content: "";
+  background: linear-gradient(var(--as-border-strong), transparent);
+}
+
+html.arhub-studio-shell-active:not(.arhub-editor-studio-active) .arhub-studio-step-row:last-child::before {
+  display: none;
+}
+
+html.arhub-studio-shell-active:not(.arhub-editor-studio-active) .arhub-studio-step-toggle {
+  position: relative;
+  display: block !important;
+  width: 100%;
+  min-height: 66px;
+  padding: 12px 10px 12px 48px !important;
+  overflow: hidden;
+  color: var(--as-text-secondary) !important;
+  border: 1px solid transparent !important;
+  border-radius: 12px !important;
+  background: transparent !important;
+  text-align: left;
+  transition: transform 180ms ease, background-color 180ms ease, border-color 180ms ease !important;
+}
+
+html.arhub-studio-shell-active:not(.arhub-editor-studio-active) .arhub-studio-step-toggle:hover {
+  border-color: var(--as-border) !important;
+  background: rgba(255, 255, 255, 0.055) !important;
+  transform: translateX(1px);
+}
+
+html.arhub-studio-shell-active:not(.arhub-editor-studio-active) .arhub-studio-status-icon {
+  position: absolute;
+  top: 19px;
+  left: 13px;
+  display: flex !important;
+  width: 24px;
+  height: 24px;
+  align-items: center;
+  justify-content: center;
+  color: #d9ffed !important;
+  border: 1px solid rgba(89, 223, 153, 0.29);
+  border-radius: 8px;
+  background: rgba(61, 203, 132, 0.18);
+  box-shadow: 0 0 0 4px rgba(53, 204, 128, 0.055);
+}
+
+html.arhub-studio-shell-active:not(.arhub-editor-studio-active) .arhub-studio-step-toggle [class*="font"],
+html.arhub-studio-shell-active:not(.arhub-editor-studio-active) .arhub-studio-step-toggle strong {
+  color: var(--as-text) !important;
+}
+
+html.arhub-studio-shell-active:not(.arhub-editor-studio-active) .arhub-studio-checkpoint {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: 5px;
+  color: rgba(218, 199, 255, 0.72) !important;
+  font-size: 10px !important;
+}
+
+html.arhub-studio-shell-active:not(.arhub-editor-studio-active) .arhub-studio-checkpoint-icon {
+  display: inline-flex;
+  color: var(--as-purple);
+}
+
+html.arhub-studio-shell-active:not(.arhub-editor-studio-active) .arhub-studio-artifact-group {
+  display: inline-flex !important;
+  align-items: center;
+  gap: 8px;
+  min-height: 36px;
+  padding: 0 9px !important;
+  color: var(--as-text-secondary) !important;
+  border: 1px solid transparent !important;
+  border-radius: 9px !important;
+  background: transparent !important;
+  font-size: 12px !important;
+  font-weight: 640 !important;
+}
+
+html.arhub-studio-shell-active:not(.arhub-editor-studio-active) .arhub-studio-artifact-group:hover {
+  color: var(--as-text) !important;
+  border-color: var(--as-border) !important;
+  background: rgba(255, 255, 255, 0.055) !important;
+}
+
+html.arhub-studio-shell-active:not(.arhub-editor-studio-active) .arhub-studio-artifact-group-icon {
+  display: inline-flex;
+  color: var(--as-purple);
+}
+
+html.arhub-studio-shell-active:not(.arhub-editor-studio-active) .arhub-studio-file-row {
+  position: relative;
+  min-height: 48px;
+  margin: 4px 0;
+  padding: 7px 10px !important;
+  border: 1px solid transparent;
+  border-radius: 11px;
+  background: rgba(255, 255, 255, 0.018);
+  transition: transform 170ms ease, border-color 170ms ease, background-color 170ms ease;
+}
+
+html.arhub-studio-shell-active:not(.arhub-editor-studio-active) .arhub-studio-file-row:hover {
+  border-color: var(--as-border) !important;
+  background: rgba(255, 255, 255, 0.055);
+  transform: translateX(1px);
+}
+
+html.arhub-studio-shell-active:not(.arhub-editor-studio-active) .arhub-studio-file-type {
+  display: inline-flex !important;
+  width: 28px;
+  height: 28px;
+  align-items: center;
+  justify-content: center;
+  color: #e6ddff !important;
+  border: 1px solid rgba(190, 161, 255, 0.22);
+  border-radius: 8px !important;
+  background: linear-gradient(145deg, rgba(149, 94, 255, 0.28), rgba(77, 39, 166, 0.12)) !important;
+  vertical-align: middle;
+}
+
+html.arhub-studio-shell-active:not(.arhub-editor-studio-active) .arhub-studio-file-type[data-arhub-studio-type="PDF"] {
+  color: #ffd9e0 !important;
+  border-color: rgba(255, 121, 148, 0.25);
+  background: linear-gradient(145deg, rgba(228, 67, 99, 0.31), rgba(151, 35, 69, 0.12)) !important;
+}
+
+html.arhub-studio-shell-active:not(.arhub-editor-studio-active) .arhub-studio-file-type[data-arhub-studio-type="JSON"],
+html.arhub-studio-shell-active:not(.arhub-editor-studio-active) .arhub-studio-file-type[data-arhub-studio-type="YAML"],
+html.arhub-studio-shell-active:not(.arhub-editor-studio-active) .arhub-studio-file-type[data-arhub-studio-type="YML"] {
+  color: #c8efff !important;
+  border-color: rgba(95, 188, 255, 0.22);
+  background: linear-gradient(145deg, rgba(47, 144, 233, 0.27), rgba(19, 82, 163, 0.12)) !important;
+}
+
+html.arhub-studio-shell-active:not(.arhub-editor-studio-active) .arhub-studio-file-type[data-arhub-studio-type="IMG"],
+html.arhub-studio-shell-active:not(.arhub-editor-studio-active) .arhub-studio-file-type[data-arhub-studio-type="IMAGE"] {
+  color: #ffe4b6 !important;
+  border-color: rgba(255, 190, 85, 0.23);
+  background: linear-gradient(145deg, rgba(241, 156, 51, 0.3), rgba(153, 88, 16, 0.11)) !important;
+}
+
+html.arhub-studio-shell-active:not(.arhub-editor-studio-active) .arhub-studio-file-name {
+  display: inline-flex !important;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+  color: var(--as-text) !important;
+  background: transparent !important;
+  font-size: 12px !important;
+  font-weight: 590 !important;
+  text-align: left;
+}
+
+html.arhub-studio-shell-active:not(.arhub-editor-studio-active) .arhub-studio-file-name-icon {
+  display: inline-flex;
+  flex: 0 0 auto;
+  color: var(--as-purple);
+}
+
+html.arhub-studio-shell-active:not(.arhub-editor-studio-active) .arhub-studio-file-row a {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--as-muted) !important;
+  font-size: 11px !important;
+}
+
+html.arhub-studio-shell-active:not(.arhub-editor-studio-active) .arhub-studio-file-row a:hover {
+  color: var(--as-text) !important;
+}
+
+/* Settings: clearly separate each Agent while preserving the existing form behavior. */
+
+html.arhub-studio-shell-active:not(.arhub-editor-studio-active)[data-arhub-studio-view="settings"] main {
+  width: min(100%, 1080px) !important;
+}
+
+html.arhub-studio-shell-active:not(.arhub-editor-studio-active) .arhub-studio-settings-card {
+  position: relative;
+  padding: 24px !important;
+  overflow: hidden;
+}
+
+html.arhub-studio-shell-active:not(.arhub-editor-studio-active) .arhub-studio-settings-card::after {
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 180px;
+  height: 1px;
+  content: "";
+  opacity: 0.7;
+  background: linear-gradient(90deg, transparent, rgba(195, 169, 255, 0.48));
+}
+
+html.arhub-studio-shell-active:not(.arhub-editor-studio-active) .arhub-studio-settings-heading {
+  display: grid;
+  grid-template-columns: 34px minmax(0, 1fr);
+  column-gap: 10px;
+  align-items: center;
+  min-width: 0;
+}
+
+html.arhub-studio-shell-active:not(.arhub-editor-studio-active) .arhub-studio-settings-heading-icon {
+  grid-row: 1 / span 2;
+  display: flex;
+  width: 31px;
+  height: 31px;
+  align-items: center;
+  justify-content: center;
+  color: #e9e2ff;
+  border: 1px solid rgba(188, 157, 255, 0.24);
+  border-radius: 10px;
+  background: linear-gradient(145deg, rgba(153, 96, 255, 0.29), rgba(72, 35, 157, 0.14));
+}
+
+html.arhub-studio-shell-active:not(.arhub-editor-studio-active) .arhub-studio-settings-heading p:first-of-type {
+  color: var(--as-text) !important;
+  font-size: 15px !important;
+  font-weight: 690 !important;
+}
+
+html.arhub-studio-shell-active:not(.arhub-editor-studio-active) .arhub-studio-settings-heading p:last-of-type {
+  color: var(--as-muted) !important;
+  font-size: 11px !important;
+  line-height: 1.55 !important;
+}
+
+html.arhub-studio-shell-active:not(.arhub-editor-studio-active) .arhub-studio-field {
+  min-width: 0;
+}
+
+html.arhub-studio-shell-active:not(.arhub-editor-studio-active) .arhub-studio-field > .arhub-studio-field-label,
+html.arhub-studio-shell-active:not(.arhub-editor-studio-active) .arhub-studio-field > :first-child {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: var(--as-muted) !important;
+  font-size: 10px !important;
+  font-weight: 680 !important;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+}
+
+html.arhub-studio-shell-active:not(.arhub-editor-studio-active) .arhub-studio-field-label-icon {
+  display: inline-flex;
+  color: var(--as-purple);
+}
+
+html.arhub-studio-shell-active:not(.arhub-editor-studio-active) .arhub-studio-field input,
+html.arhub-studio-shell-active:not(.arhub-editor-studio-active) .arhub-studio-field textarea,
+html.arhub-studio-shell-active:not(.arhub-editor-studio-active) .arhub-studio-field select {
+  min-height: 39px !important;
+  color: var(--as-text) !important;
+  border: 1px solid var(--as-border) !important;
+  border-radius: 10px !important;
+  background: rgba(5, 4, 11, 0.38) !important;
+  box-shadow: inset 0 1px rgba(255, 255, 255, 0.035) !important;
+  font-size: 12px !important;
+  transition: border-color 170ms ease, background-color 170ms ease, box-shadow 170ms ease !important;
+}
+
+html[data-theme="light"].arhub-studio-shell-active:not(.arhub-editor-studio-active) .arhub-studio-field input,
+html[data-theme="light"].arhub-studio-shell-active:not(.arhub-editor-studio-active) .arhub-studio-field textarea,
+html[data-theme="light"].arhub-studio-shell-active:not(.arhub-editor-studio-active) .arhub-studio-field select {
+  background: rgba(255, 255, 255, 0.63) !important;
+}
+
+html.arhub-studio-shell-active:not(.arhub-editor-studio-active) .arhub-studio-field input:focus,
+html.arhub-studio-shell-active:not(.arhub-editor-studio-active) .arhub-studio-field textarea:focus,
+html.arhub-studio-shell-active:not(.arhub-editor-studio-active) .arhub-studio-field select:focus {
+  border-color: rgba(172, 135, 255, 0.58) !important;
+  background: rgba(35, 21, 66, 0.48) !important;
+  box-shadow: 0 0 0 4px rgba(145, 96, 255, 0.11), inset 0 1px rgba(255, 255, 255, 0.05) !important;
+}
+
+html.arhub-studio-shell-active:not(.arhub-editor-studio-active) .arhub-studio-settings-card > p,
+html.arhub-studio-shell-active:not(.arhub-editor-studio-active) .arhub-studio-field p {
+  color: var(--as-muted) !important;
+  font-size: 11px !important;
+}
+
+/* Modal and extension surfaces should not snap back to the old flat theme. */
+
+html.arhub-studio-shell-active:not(.arhub-editor-studio-active) .mw-extension-overlay,
+html.arhub-studio-shell-active:not(.arhub-editor-studio-active) .fixed.inset-0 {
+  background: rgba(2, 2, 8, 0.5) !important;
+  backdrop-filter: blur(10px) saturate(130%);
+  -webkit-backdrop-filter: blur(10px) saturate(130%);
+}
+
+html.arhub-studio-shell-active:not(.arhub-editor-studio-active) .mw-extension-drawer,
+html.arhub-studio-shell-active:not(.arhub-editor-studio-active) [role="dialog"] {
+  color: var(--as-text) !important;
+  border-color: var(--as-border) !important;
+  background:
+    linear-gradient(145deg, rgba(255, 255, 255, 0.085), transparent 40%),
+    var(--as-panel-strong) !important;
+  box-shadow: 0 28px 84px rgba(0, 0, 0, 0.44), inset 0 1px rgba(255, 255, 255, 0.09) !important;
+  backdrop-filter: blur(34px) saturate(160%) !important;
+  -webkit-backdrop-filter: blur(34px) saturate(160%) !important;
+}
+
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  html.arhub-studio-shell-active:not(.arhub-editor-studio-active) #mw-codex-sidebar,
+  html.arhub-studio-shell-active:not(.arhub-editor-studio-active) main .card,
+  html.arhub-studio-shell-active:not(.arhub-editor-studio-active) .arhub-studio-stat-grid {
+    background: var(--as-panel-strong) !important;
+  }
+}
+
+@media (max-width: 1120px) and (min-width: 861px) {
+  html.arhub-studio-shell-active:not(.arhub-editor-studio-active) {
+    --as-sidebar-width: 212px;
+  }
+
+  html.arhub-studio-shell-active:not(.arhub-editor-studio-active) main {
+    padding: 39px 34px 58px !important;
+  }
+
+  html.arhub-studio-shell-active:not(.arhub-editor-studio-active) .mw-shell-recent {
+    margin-top: 20px !important;
+  }
+
+  html.arhub-studio-shell-active:not(.arhub-editor-studio-active) .arhub-studio-stat {
+    padding-left: 47px !important;
+  }
+
+  html.arhub-studio-shell-active:not(.arhub-editor-studio-active) .arhub-studio-stat-icon {
+    left: 15px;
+  }
+
+  html.arhub-studio-shell-active:not(.arhub-editor-studio-active)[data-arhub-studio-view="workflows"] .arhub-studio-workflow-row > :nth-child(3),
+  html.arhub-studio-shell-active:not(.arhub-editor-studio-active)[data-arhub-studio-view="workflows"] .arhub-studio-workflow-row > :nth-child(5),
+  html.arhub-studio-shell-active:not(.arhub-editor-studio-active)[data-arhub-studio-view="workflows"] .arhub-studio-workflow-row > :nth-child(6),
+  html.arhub-studio-shell-active:not(.arhub-editor-studio-active)[data-arhub-studio-view="workflows"] main .flex.items-center.gap-3.px-4.py-2 > :nth-child(3),
+  html.arhub-studio-shell-active:not(.arhub-editor-studio-active)[data-arhub-studio-view="workflows"] main .flex.items-center.gap-3.px-4.py-2 > :nth-child(5) {
+    display: none !important;
+  }
+}
+
+@media (max-width: 860px) {
+  html.arhub-studio-shell-active:not(.arhub-editor-studio-active) #root,
+  html.arhub-studio-shell-active:not(.arhub-editor-studio-active) body.mw-shell-collapsed #root {
+    margin-left: 0 !important;
+    padding-top: 48px !important;
+  }
+
+  html.arhub-studio-shell-active:not(.arhub-editor-studio-active) #mw-codex-sidebar,
+  html.arhub-studio-shell-active:not(.arhub-editor-studio-active) body.mw-shell-collapsed #mw-codex-sidebar {
+    width: min(286px, calc(100vw - 40px)) !important;
+    padding: 19px 14px 14px !important;
+  }
+
+  html.arhub-studio-shell-active:not(.arhub-editor-studio-active) #mw-codex-topbar,
+  html.arhub-studio-shell-active:not(.arhub-editor-studio-active) body.mw-shell-collapsed #mw-codex-topbar {
+    left: 0 !important;
+    height: 48px !important;
+    padding: 0 12px !important;
+  }
+
+  html.arhub-studio-shell-active:not(.arhub-editor-studio-active) main {
+    padding: 30px 18px 48px !important;
+  }
+
+  html.arhub-studio-shell-active:not(.arhub-editor-studio-active) main h1 {
+    font-size: 28px !important;
+  }
+
+  html.arhub-studio-shell-active:not(.arhub-editor-studio-active) .arhub-studio-stat-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+
+  html.arhub-studio-shell-active:not(.arhub-editor-studio-active) .arhub-studio-stat {
+    min-height: 90px;
+    padding: 17px 14px 14px 48px !important;
+    border-bottom: 1px solid var(--as-border);
+  }
+
+  html.arhub-studio-shell-active:not(.arhub-editor-studio-active) .arhub-studio-stat:nth-child(2) {
+    border-right: 0;
+  }
+
+  html.arhub-studio-shell-active:not(.arhub-editor-studio-active) .arhub-studio-stat:nth-child(n + 3) {
+    border-bottom: 0;
+  }
+
+  html.arhub-studio-shell-active:not(.arhub-editor-studio-active) .arhub-studio-stat-icon {
+    top: 16px;
+    left: 15px;
+  }
+
+  html.arhub-studio-shell-active:not(.arhub-editor-studio-active)[data-arhub-studio-view="workflows"] main .animate-fade-in > .flex.items-end.justify-between {
+    align-items: flex-start !important;
+    flex-direction: column;
+  }
+
+  html.arhub-studio-shell-active:not(.arhub-editor-studio-active) .arhub-studio-settings-card {
+    padding: 18px !important;
+  }
+}
+
+@media (max-width: 560px) {
+  html.arhub-studio-shell-active:not(.arhub-editor-studio-active) main {
+    padding-inline: 14px !important;
+  }
+
+  html.arhub-studio-shell-active:not(.arhub-editor-studio-active) .arhub-studio-kicker {
+    font-size: 9px;
+  }
+
+  html.arhub-studio-shell-active:not(.arhub-editor-studio-active) .arhub-studio-file-row {
+    padding: 7px !important;
+  }
+
+  html.arhub-studio-shell-active:not(.arhub-editor-studio-active) .arhub-studio-workflow-row {
+    padding: 12px !important;
+  }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  html[data-mw-page].arhub-studio-shell-active:not(.arhub-editor-studio-active) main.max-w-7xl > .animate-fade-in {
+    animation: arhub-studio-route-fade 150ms cubic-bezier(0.22, 1, 0.36, 1) both !important;
+    transform: none !important;
+    will-change: opacity;
+  }
+
+  html.arhub-studio-shell-active:not(.arhub-editor-studio-active) main .animate-fade-in > * {
+    animation: none !important;
+    transform: none !important;
+  }
+}
+
+@keyframes arhub-studio-route-fade {
+  from {
+    opacity: 0.82;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html.arhub-studio-shell-active:not(.arhub-editor-studio-active) *,
+  html.arhub-studio-shell-active:not(.arhub-editor-studio-active) *::before,
+  html.arhub-studio-shell-active:not(.arhub-editor-studio-active) *::after {
+    scroll-behavior: auto !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* Final visual calibration: independent status cards, readable light glass, and stable forms. */
+html.arhub-studio-shell-active:not(.arhub-editor-studio-active) .arhub-studio-stat-grid {
+  gap: 12px !important;
+  overflow: visible !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}
+
+html[data-mw-page="workflows"].arhub-studio-shell-active:not(.arhub-editor-studio-active) main .grid.grid-cols-4.arhub-studio-stat-grid {
+  gap: 12px !important;
+  overflow: visible !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  background-color: transparent !important;
+  box-shadow: none !important;
+  filter: none !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}
+
+html[data-mw-page="workflows"].arhub-studio-shell-active:not(.arhub-editor-studio-active) main .grid.grid-cols-4.arhub-studio-stat-grid::before,
+html[data-mw-page="workflows"].arhub-studio-shell-active:not(.arhub-editor-studio-active) main .grid.grid-cols-4.arhub-studio-stat-grid::after {
+  content: none !important;
+  display: none !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  filter: none !important;
+}
+
+html[data-mw-page="workflows"].arhub-studio-shell-active:not(.arhub-editor-studio-active) main .grid.grid-cols-4.arhub-studio-stat-grid > .arhub-studio-stat {
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.20), inset 0 1px var(--as-highlight) !important;
+}
+
+html[data-theme="light"][data-mw-page="workflows"].arhub-studio-shell-active:not(.arhub-editor-studio-active) main .grid.grid-cols-4.arhub-studio-stat-grid > .arhub-studio-stat {
+  box-shadow: 0 10px 24px rgba(71, 51, 112, 0.12), inset 0 1px var(--as-highlight) !important;
+}
+
+/* Shared trays make independent controls read as a nested card. Keep the parent invisible. */
+html[data-mw-page="workflows"].arhub-studio-shell-active:not(.arhub-editor-studio-active) main .flex.gap-1.mb-6,
+html.arhub-studio-shell-active:not(.arhub-editor-studio-active)[data-arhub-studio-view="workflows"] main .flex.gap-1.mb-6 {
+  gap: 6px !important;
+  padding: 0 !important;
+  overflow: visible !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  filter: none !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}
+
+html[data-mw-page="workflows"].arhub-studio-shell-active:not(.arhub-editor-studio-active) main .flex.gap-1.mb-6::before,
+html[data-mw-page="workflows"].arhub-studio-shell-active:not(.arhub-editor-studio-active) main .flex.gap-1.mb-6::after {
+  content: none !important;
+  display: none !important;
+}
+
+html.arhub-studio-shell-active:not(.arhub-editor-studio-active)[data-arhub-studio-view="workflow"] .arhub-studio-pipeline {
+  padding: 0 !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  filter: none !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}
+
+html.arhub-studio-shell-active:not(.arhub-editor-studio-active)[data-arhub-studio-view="workflow"] .arhub-studio-pipeline::before,
+html.arhub-studio-shell-active:not(.arhub-editor-studio-active)[data-arhub-studio-view="workflow"] .arhub-studio-pipeline::after {
+  content: none !important;
+  display: none !important;
+}
+
+html.arhub-studio-shell-active:not(.arhub-editor-studio-active)[data-arhub-studio-view="workflow"] .arhub-studio-pipeline > p:first-child {
+  padding: 1px 4px 11px !important;
+}
+
+html.arhub-studio-shell-active:not(.arhub-editor-studio-active) .arhub-studio-stat,
+html.arhub-studio-shell-active:not(.arhub-editor-studio-active) .arhub-studio-stat:last-child {
+  box-sizing: border-box;
+  min-height: 104px;
+  padding: 22px 20px 17px 53px !important;
+  border: 1px solid var(--as-border) !important;
+  border-radius: 16px !important;
+  background:
+    linear-gradient(142deg, rgba(255, 255, 255, 0.085), transparent 46%),
+    var(--as-panel) !important;
+  box-shadow: var(--as-shadow), inset 0 1px var(--as-highlight) !important;
+  backdrop-filter: blur(25px) saturate(145%) !important;
+  -webkit-backdrop-filter: blur(25px) saturate(145%) !important;
+}
+
+html[data-theme="light"].arhub-studio-shell-active:not(.arhub-editor-studio-active) .arhub-studio-stat-icon {
+  color: #6544c9 !important;
+  border-color: rgba(101, 68, 201, 0.24) !important;
+  background: rgba(101, 68, 201, 0.13) !important;
+  box-shadow: inset 0 1px rgba(255, 255, 255, 0.84);
+}
+
+html[data-theme="light"].arhub-studio-shell-active:not(.arhub-editor-studio-active) .arhub-studio-stat:nth-child(2) .arhub-studio-stat-icon {
+  color: #9a5a00 !important;
+  border-color: rgba(154, 90, 0, 0.22) !important;
+  background: rgba(242, 164, 53, 0.16) !important;
+}
+
+html[data-theme="light"].arhub-studio-shell-active:not(.arhub-editor-studio-active) .arhub-studio-stat:nth-child(3) .arhub-studio-stat-icon {
+  color: #17794f !important;
+  border-color: rgba(23, 121, 79, 0.2) !important;
+  background: rgba(67, 192, 129, 0.15) !important;
+}
+
+html[data-theme="light"].arhub-studio-shell-active:not(.arhub-editor-studio-active) .arhub-studio-stat:nth-child(4) .arhub-studio-stat-icon {
+  color: #ba3151 !important;
+  border-color: rgba(186, 49, 81, 0.2) !important;
+  background: rgba(244, 107, 138, 0.14) !important;
+}
+
+html[data-theme="light"].arhub-studio-shell-active:not(.arhub-editor-studio-active) .mw-shell-nav-link svg,
+html[data-theme="light"].arhub-studio-shell-active:not(.arhub-editor-studio-active) .arhub-studio-settings-heading-icon,
+html[data-theme="light"].arhub-studio-shell-active:not(.arhub-editor-studio-active) .arhub-studio-field-label-icon {
+  opacity: 1 !important;
+}
+
+html.arhub-studio-shell-active:not(.arhub-editor-studio-active)[data-arhub-studio-view="workflow"] main .badge,
+html.arhub-studio-shell-active:not(.arhub-editor-studio-active)[data-arhub-studio-view="workflow"] main .badge-completed {
+  box-sizing: border-box;
+  display: inline-flex !important;
+  flex: 0 0 auto !important;
+  align-items: center;
+  justify-content: center;
+  min-inline-size: 68px;
+  min-height: 24px;
+  max-width: none !important;
+  padding: 0 9px !important;
+  line-height: 1 !important;
+  white-space: nowrap !important;
+}
+
+html.arhub-studio-shell-active:not(.arhub-editor-studio-active)[data-arhub-studio-view="settings"] .arhub-studio-settings-card:has(input[placeholder="用于生成示意图/技术路线图/流程图（可选）"]) > .grid.gap-4 {
+  width: 100% !important;
+  min-width: 0 !important;
+  grid-template-columns: minmax(0, 1fr) !important;
+  justify-items: stretch !important;
+}
+
+html.arhub-studio-shell-active:not(.arhub-editor-studio-active)[data-arhub-studio-view="settings"] .arhub-studio-settings-card:has(input[placeholder="用于生成示意图/技术路线图/流程图（可选）"]) > .grid.gap-4 > *,
+html.arhub-studio-shell-active:not(.arhub-editor-studio-active)[data-arhub-studio-view="settings"] .arhub-studio-settings-card:has(input[placeholder="用于生成示意图/技术路线图/流程图（可选）"]) .arhub-studio-field {
+  width: 100% !important;
+  min-width: 0 !important;
+}
+
+html.arhub-studio-shell-active:not(.arhub-editor-studio-active)[data-arhub-studio-view="settings"] .arhub-studio-settings-card:has(input[placeholder="用于生成示意图/技术路线图/流程图（可选）"]) .arhub-studio-field input {
+  width: 100% !important;
+  min-height: 44px !important;
+  max-width: none !important;
+}
+
+html[data-theme="light"].arhub-studio-shell-active:not(.arhub-editor-studio-active) .arhub-studio-field input:focus,
+html[data-theme="light"].arhub-studio-shell-active:not(.arhub-editor-studio-active) .arhub-studio-field textarea:focus,
+html[data-theme="light"].arhub-studio-shell-active:not(.arhub-editor-studio-active) .arhub-studio-field select:focus {
+  border-color: rgba(101, 68, 201, 0.64) !important;
+  background: rgba(255, 255, 255, 0.94) !important;
+  box-shadow: 0 0 0 4px rgba(101, 68, 201, 0.16), inset 0 1px rgba(255, 255, 255, 0.9) !important;
+}
+
+@media (max-width: 860px) {
+  html.arhub-studio-shell-active:not(.arhub-editor-studio-active) .arhub-studio-stat-grid {
+    gap: 8px !important;
+  }
+
+  html[data-mw-page="workflows"].arhub-studio-shell-active:not(.arhub-editor-studio-active) main .grid.grid-cols-4.arhub-studio-stat-grid {
+    gap: 8px !important;
+  }
+
+  html.arhub-studio-shell-active:not(.arhub-editor-studio-active) .arhub-studio-stat,
+  html.arhub-studio-shell-active:not(.arhub-editor-studio-active) .arhub-studio-stat:last-child,
+  html.arhub-studio-shell-active:not(.arhub-editor-studio-active) .arhub-studio-stat:nth-child(2),
+  html.arhub-studio-shell-active:not(.arhub-editor-studio-active) .arhub-studio-stat:nth-child(n + 3) {
+    min-height: 90px;
+    padding: 17px 14px 14px 48px !important;
+    border: 1px solid var(--as-border) !important;
+  }
+}
