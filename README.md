@@ -448,3 +448,12 @@ is available in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
 
 ArHub-owned code is distributed under the [MIT License](LICENSE). Third-party
 components remain subject to their respective licenses.
+
+---
+
+## 社区 / Community
+
+欢迎在 [Linux DO 社区](https://linux.do/) 交流 ArHub 的使用体验、问题反馈和扩展想法。
+
+Join the ArHub discussion on [Linux DO](https://linux.do/) to share feedback,
+report issues, and exchange extension ideas.
