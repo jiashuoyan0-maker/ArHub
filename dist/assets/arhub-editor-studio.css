@@ -472,23 +472,61 @@ html.arhub-editor-studio-active.mw-editor-active .mw-composer-row {
 }
 
 html.arhub-editor-studio-active.mw-editor-active .mw-composer-row {
+  box-sizing: border-box;
+  display: flex !important;
+  flex-wrap: wrap !important;
+  align-items: center !important;
   min-height: 58px;
-  padding: 5px 6px 5px 14px !important;
+  padding: 9px !important;
+  gap: 8px !important;
   border: 1px solid color-mix(in srgb, var(--arhub-studio-line) 84%, var(--arhub-studio-accent) 16%) !important;
   border-radius: 18px !important;
   background: color-mix(in srgb, var(--arhub-studio-panel-strong) 93%, transparent) !important;
-  box-shadow: 0 9px 28px rgba(24, 18, 52, 0.1), inset 0 1px 0 var(--arhub-studio-hairline) !important;
+  box-shadow: 0 7px 22px rgba(24, 18, 52, 0.075), inset 0 1px 0 var(--arhub-studio-hairline) !important;
 }
 
 html.arhub-editor-studio-active.mw-editor-active .mw-agent-input {
+  order: -1 !important;
+  flex: 0 0 100% !important;
+  width: 100% !important;
+  min-width: 0 !important;
+  max-width: none !important;
+  min-height: 104px !important;
+  max-height: 260px !important;
+  padding: 9px 10px 10px !important;
+  border: 0 !important;
+  border-radius: 10px !important;
   color: var(--arhub-studio-ink) !important;
+  background: transparent !important;
+  box-shadow: none !important;
   font-size: 14px !important;
+  line-height: 1.58 !important;
 }
 
-html.arhub-editor-studio-active.mw-editor-active .mw-composer-row > button {
+html.arhub-editor-studio-active.mw-editor-active .mw-composer-row > button,
+html.arhub-editor-studio-active.mw-editor-active .mw-composer-row > button.arhub-studio-icon-control.is-icon-only {
+  flex: 0 0 42px !important;
+  width: 42px !important;
   min-width: 42px !important;
+  height: 42px !important;
   min-height: 42px !important;
-  border-radius: 13px !important;
+  padding: 0 !important;
+  border-radius: 12px !important;
+}
+
+html.arhub-editor-studio-active.mw-editor-active .mw-composer-row > .mw-command-trigger,
+html.arhub-editor-studio-active.mw-editor-active .mw-composer-row > .mw-attachment-trigger,
+html.arhub-editor-studio-active.mw-editor-active .mw-composer-row > .mw-image-trigger {
+  order: 1;
+}
+
+html.arhub-editor-studio-active.mw-editor-active .mw-composer-model {
+  order: 2;
+  margin-left: auto;
+}
+
+html.arhub-editor-studio-active.mw-editor-active .mw-composer-row > .mw-agent-action {
+  order: 3;
 }
 
 html.arhub-editor-studio-active.mw-editor-active .mw-workbench > .card {

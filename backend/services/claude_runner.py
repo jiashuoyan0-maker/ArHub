@@ -344,6 +344,7 @@ class ClaudeRunner:
         cwd: str | Path,
         workflow_id: str,
         on_output: OutputCallback | None = None,
+        on_delta: OutputCallback | None = None,
         extra_params: dict[str, Any] | None = None,
         workspace_files: list[str] | None = None,
         context_summary: str | None = None,
@@ -406,6 +407,7 @@ class ClaudeRunner:
                         tools=AGENT_TOOLS,
                         tool_choice="auto",
                         timeout=inactivity_timeout,
+                        on_delta=on_delta,
                     ),
                     timeout=inactivity_timeout + 5,
                 )
@@ -416,7 +418,8 @@ class ClaudeRunner:
                 text = message_text(message)
                 if text:
                     final_text = text
-                    await self._emit(on_output, text)
+                    if on_delta is None:
+                        await self._emit(on_output, text)
                 tool_calls = message.get("tool_calls") or []
                 if not tool_calls:
                     changed = self._changed_files(before, self._snapshot_files(root))

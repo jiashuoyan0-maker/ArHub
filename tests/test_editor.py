@@ -27,6 +27,10 @@ class FakeRunner:
         path = Path(cwd) / "paper" / "main.md"
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text("# Revised\n", encoding="utf-8")
+        delta_callback = kwargs.get("on_delta")
+        if delta_callback:
+            await delta_callback("Revision ")
+            await delta_callback("complete")
         callback = kwargs.get("on_output")
         if callback:
             await callback("Updated paper/main.md")
@@ -117,6 +121,34 @@ class EditorAgentTests(unittest.IsolatedAsyncioTestCase):
             applied = manager.apply("wf-test", workspace, ["paper/main.md"])
             self.assertEqual(applied["applied"], ["paper/main.md"])
             self.assertEqual(source.read_text(encoding="utf-8"), "# Revised\n")
+
+    async def test_streaming_progress_and_status_expose_cumulative_text(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            workspace = root / "workspace"
+            workspace.mkdir()
+            manager = EditorAgentManager(FakeRunner(), root / "state")
+
+            run = await manager.start(
+                "wf-stream", workspace, "Revise the file", mode="markdown"
+            )
+            await run.task
+            events = []
+            while not run.queue.empty():
+                events.append(await run.queue.get())
+
+            streamed = [
+                event["message"]
+                for event in events
+                if isinstance(event, dict)
+                and event.get("type") == "progress"
+                and event.get("streaming") is True
+            ]
+            self.assertEqual(streamed, ["Revision ", "Revision complete"])
+            self.assertEqual(
+                manager.check("wf-stream", workspace)["stream_text"],
+                "Revision complete",
+            )
 
     def test_missing_sandbox_has_no_pending_diff(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

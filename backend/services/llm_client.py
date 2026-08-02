@@ -3,13 +3,14 @@
 from __future__ import annotations
 
 import base64
+import inspect
 import json
 import logging
 import mimetypes
 import os
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
+from typing import Any, Awaitable, Callable
 
 import httpx
 
@@ -21,6 +22,8 @@ except ModuleNotFoundError:  # Package import used by tests and library consumer
     from backend.services.state_store import get_all_settings
 
 log = logging.getLogger(__name__)
+
+DeltaCallback = Callable[[str], Awaitable[None] | None]
 
 AGENT_KEYS: dict[str, dict[str, str]] = {
     "executor": {
@@ -121,6 +124,153 @@ def _error_message(response: httpx.Response) -> str:
     return text[:800] or response.reason_phrase
 
 
+def _delta_text(value: Any) -> str:
+    if isinstance(value, str):
+        return value
+    if not isinstance(value, list):
+        return ""
+    parts: list[str] = []
+    for item in value:
+        if not isinstance(item, dict):
+            continue
+        text = item.get("text")
+        if isinstance(text, str):
+            parts.append(text)
+    return "".join(parts)
+
+
+async def _emit_delta(callback: DeltaCallback | None, text: str) -> None:
+    if callback is None or not text:
+        return
+    result = callback(text)
+    if inspect.isawaitable(result):
+        await result
+
+
+async def _consume_chat_stream(
+    response: httpx.Response,
+    agent: str,
+    on_delta: DeltaCallback,
+) -> dict[str, Any]:
+    content_parts: list[str] = []
+    reasoning_parts: list[str] = []
+    tool_calls: dict[int, dict[str, Any]] = {}
+    role = "assistant"
+    finish_reason: Any = None
+    usage: Any = None
+    raw_lines: list[str] = []
+    saw_choice = False
+
+    async for raw_line in response.aiter_lines():
+        line = raw_line.strip()
+        if not line or line.startswith(":") or line.startswith("event:"):
+            continue
+        if not line.startswith("data:"):
+            raw_lines.append(line)
+            continue
+        data = line[5:].strip()
+        if not data or data == "[DONE]":
+            if data == "[DONE]":
+                break
+            continue
+        try:
+            chunk = json.loads(data)
+        except json.JSONDecodeError:
+            log.debug("Ignoring malformed [%s] stream event", agent)
+            continue
+        if not isinstance(chunk, dict):
+            continue
+        if chunk.get("usage") is not None:
+            usage = chunk["usage"]
+        choices = chunk.get("choices")
+        if not isinstance(choices, list):
+            continue
+        for choice in choices:
+            if not isinstance(choice, dict) or int(choice.get("index") or 0) != 0:
+                continue
+            saw_choice = True
+            if choice.get("finish_reason") is not None:
+                finish_reason = choice["finish_reason"]
+            delta = choice.get("delta") or choice.get("message") or {}
+            if not isinstance(delta, dict):
+                continue
+            if isinstance(delta.get("role"), str):
+                role = delta["role"]
+            text = _delta_text(delta.get("content"))
+            if text:
+                content_parts.append(text)
+                await _emit_delta(on_delta, text)
+            reasoning = _delta_text(delta.get("reasoning_content"))
+            if reasoning:
+                reasoning_parts.append(reasoning)
+            streamed_calls = delta.get("tool_calls")
+            if not isinstance(streamed_calls, list):
+                continue
+            for fallback_index, item in enumerate(streamed_calls):
+                if not isinstance(item, dict):
+                    continue
+                try:
+                    index = int(item.get("index", fallback_index))
+                except (TypeError, ValueError):
+                    index = fallback_index
+                target = tool_calls.setdefault(
+                    index,
+                    {
+                        "id": "",
+                        "type": "function",
+                        "function": {"name": "", "arguments": ""},
+                    },
+                )
+                if isinstance(item.get("id"), str) and item["id"]:
+                    target["id"] = item["id"]
+                if isinstance(item.get("type"), str) and item["type"]:
+                    target["type"] = item["type"]
+                function = item.get("function") or {}
+                if not isinstance(function, dict):
+                    continue
+                if isinstance(function.get("name"), str):
+                    target["function"]["name"] += function["name"]
+                arguments = function.get("arguments")
+                if isinstance(arguments, str):
+                    target["function"]["arguments"] += arguments
+
+    if not saw_choice and raw_lines:
+        try:
+            payload = json.loads("\n".join(raw_lines))
+        except json.JSONDecodeError as exc:
+            raise RuntimeError(f"[{agent}] malformed streaming response") from exc
+        if not isinstance(payload, dict) or not isinstance(payload.get("choices"), list):
+            raise RuntimeError(f"[{agent}] response does not contain a choices array")
+        choices = payload.get("choices") or []
+        if choices and isinstance(choices[0], dict):
+            text = message_text(choices[0].get("message") or {})
+            await _emit_delta(on_delta, text)
+        return payload
+    if not saw_choice:
+        raise RuntimeError(f"[{agent}] streaming response did not contain a choice")
+
+    message: dict[str, Any] = {
+        "role": role,
+        "content": "".join(content_parts) or None,
+    }
+    if reasoning_parts:
+        message["reasoning_content"] = "".join(reasoning_parts)
+    if tool_calls:
+        message["tool_calls"] = [tool_calls[index] for index in sorted(tool_calls)]
+    result: dict[str, Any] = {
+        "choices": [
+            {
+                "index": 0,
+                "message": message,
+                "finish_reason": finish_reason,
+            }
+        ]
+    }
+    if usage is not None:
+        result["usage"] = usage
+    return result
+
+
 async def chat_completion(
     agent: str,
     messages: list[dict[str, Any]],
@@ -131,6 +281,7 @@ async def chat_completion(
     max_tokens: int | None = None,
     temperature: float | None = None,
     client: httpx.AsyncClient | None = None,
+    on_delta: DeltaCallback | None = None,
 ) -> dict[str, Any]:
     """Send a chat-completions request and return the provider response."""
     config = await get_agent_config(agent)
@@ -142,11 +293,29 @@ async def chat_completion(
         body["max_tokens"] = max_tokens
     if temperature is not None:
         body["temperature"] = temperature
+    if on_delta is not None:
+        body["stream"] = True
 
     owns_client = client is None
     if client is None:
         client = httpx.AsyncClient(timeout=timeout, trust_env=True)
     try:
+        if on_delta is not None:
+            headers = _headers(config)
+            headers["Accept"] = "text/event-stream"
+            async with client.stream(
+                "POST",
+                chat_completions_url(config.base_url),
+                json=body,
+                headers=headers,
+                timeout=timeout,
+            ) as response:
+                if response.is_error:
+                    await response.aread()
+                    raise RuntimeError(
+                        f"[{agent}] HTTP {response.status_code}: {_error_message(response)}"
+                    )
+                return await _consume_chat_stream(response, agent, on_delta)
         response = await client.post(
             chat_completions_url(config.base_url),
             json=body,

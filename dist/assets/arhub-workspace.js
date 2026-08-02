@@ -1,3 +1,5 @@
+import { createIcon, fileVisual } from "./arhub-icons.js";
+
 const EDITOR_ROUTE = /^\/workflow\/([^/]+)\/editor\/?$/;
 const STORAGE_PREFIX = "arhub-open-workspace:";
 const PROFILE_MARKER = "[ArHub Agent Profile]";
@@ -106,6 +108,8 @@ const state = {
   scheduled: false,
   effectiveLayout: "right",
   resizeSaveTimer: null,
+  attachments: [],
+  attachmentSerial: 0,
 };
 
 function clamp(value, min, max) {
@@ -159,6 +163,26 @@ function setReactValue(input, value) {
   input.focus();
 }
 
+function readyAttachments() {
+  return state.attachments.filter((item) => item.status === "ready");
+}
+
+function attachmentPromptBlock(items) {
+  if (!items.length) return "";
+  const lines = items.map((item) => {
+    const extracted = item.extractedPath
+      ? ` (extracted text: ${item.extractedPath})`
+      : "";
+    return `- ${item.path}${extracted}`;
+  });
+  return [
+    "[ArHub Attached Workspace Files]",
+    ...lines,
+    "Use these files as task context. Prefer an extracted text path when provided.",
+    "[End Attached Workspace Files]",
+  ].join("\n");
+}
+
 function selectedProfile() {
   return (
     state.registry.agent_profiles?.find(
@@ -171,7 +195,7 @@ function installFetchProfileAdapter() {
   if (window.__arhubOpenWorkspaceFetch) return;
   window.__arhubOpenWorkspaceFetch = true;
 
-  window.fetch = (input, init) => {
+  window.fetch = async (input, init) => {
     const url =
       typeof input === "string"
         ? input
@@ -181,16 +205,20 @@ function installFetchProfileAdapter() {
     const path = new URL(url, window.location.href).pathname;
     const method = String(init?.method || "GET").toUpperCase();
 
-    if (
+    const editorRequest =
       method === "POST" &&
       /^\/api\/editor\/[^/]+\/(ai-agent|ai-edit)$/.test(path) &&
-      typeof init?.body === "string"
-    ) {
+      typeof init?.body === "string";
+    let requestInit = init;
+    let submittedAttachments = [];
+
+    if (editorRequest) {
       const profile = state.activeProfile || selectedProfile();
-      if (profile?.system_prompt) {
-        try {
-          const payload = JSON.parse(init.body);
+      try {
+        const payload = JSON.parse(init.body);
+        if (typeof payload.message === "string") {
           if (
+            profile?.system_prompt &&
             typeof payload.message === "string" &&
             !payload.message.startsWith(PROFILE_MARKER) &&
             !payload.message.startsWith(LEGACY_PROFILE_MARKER)
@@ -204,21 +232,36 @@ function installFetchProfileAdapter() {
               "",
               payload.message,
             ].join("\n");
-            const headers = new Headers(init.headers || {});
-            headers.set("X-ArHub-Agent-Profile", profile.id);
-            return state.nativeFetch(input, {
-              ...init,
-              headers,
-              body: JSON.stringify(payload),
-            });
           }
-        } catch {
-          // Preserve the original request if another frontend version changes its body.
+          submittedAttachments = readyAttachments();
+          const attachmentBlock = attachmentPromptBlock(submittedAttachments);
+          if (attachmentBlock) {
+            payload.message += `\n\n${attachmentBlock}`;
+          }
+          const headers = new Headers(init.headers || {});
+          if (profile?.id) {
+            headers.set("X-ArHub-Agent-Profile", profile.id);
+          }
+          requestInit = {
+            ...init,
+            headers,
+            body: JSON.stringify(payload),
+          };
         }
+      } catch {
+        // Preserve the original request if another frontend version changes its body.
       }
     }
 
-    return state.nativeFetch(input, init);
+    const response = await state.nativeFetch(input, requestInit);
+    if (editorRequest && response.ok && submittedAttachments.length) {
+      const submittedIds = new Set(submittedAttachments.map((item) => item.id));
+      state.attachments = state.attachments.filter(
+        (item) => !submittedIds.has(item.id),
+      );
+      scheduleEnhance();
+    }
+    return response;
   };
 }
 
@@ -331,6 +374,193 @@ function createIconButton(icon, label, className = "") {
   return button;
 }
 
+function createLucideButton(icon, label, className = "") {
+  const button = createIconButton("", label, className);
+  button.append(createIcon(icon, { size: 17, strokeWidth: 1.8 }));
+  button.dataset.mwIcon = icon;
+  return button;
+}
+
+function setControlIcon(button, icon, label) {
+  if (button.dataset.mwIcon !== icon || !button.querySelector("svg")) {
+    button.replaceChildren(createIcon(icon, { size: 17, strokeWidth: 2 }));
+    button.dataset.mwIcon = icon;
+  }
+  button.title = label;
+  button.setAttribute("aria-label", label);
+}
+
+function sanitizedAttachmentName(value) {
+  const base = String(value || "attachment")
+    .split(/[\\/]/)
+    .pop()
+    .replace(/[<>:"/\\|?*\u0000-\u001f]/g, "_")
+    .replace(/[. ]+$/g, "")
+    .slice(0, 140) || "attachment";
+  state.attachmentSerial += 1;
+  return `${Date.now().toString(36)}-${state.attachmentSerial}-${base}`;
+}
+
+function attachmentNeedsExtraction(name) {
+  return /\.(pdf|docx?)$/i.test(name);
+}
+
+function wait(milliseconds) {
+  return new Promise((resolve) => window.setTimeout(resolve, milliseconds));
+}
+
+async function responseError(response) {
+  const body = await response.text().catch(() => "");
+  if (!body) return `HTTP ${response.status}`;
+  try {
+    const payload = JSON.parse(body);
+    return payload.detail || payload.message || JSON.stringify(payload);
+  } catch {
+    return body;
+  }
+}
+
+async function waitForAttachmentExtraction(workflowId, storedName) {
+  for (let attempt = 0; attempt < 80; attempt += 1) {
+    const response = await state.nativeFetch(
+      `/api/workflows/${workflowId}/artifacts/extract-status?target_dir=attachments`,
+      { cache: "no-store" },
+    );
+    if (response.ok) {
+      const payload = await response.json();
+      const status = payload?.files?.[storedName];
+      if (status?.status === "done") {
+        return status.extracted_path
+          ? `attachments/${status.extracted_path}`
+          : "";
+      }
+      if (status?.status === "failed") {
+        throw new Error(status.error || "File text extraction failed");
+      }
+    }
+    await wait(500);
+  }
+  throw new Error("File text extraction timed out");
+}
+
+function renderAttachmentStrip(parts = state.parts) {
+  if (!parts?.composer) return;
+  const row = parts.input.closest(".mw-composer-row, .flex.gap-2");
+  if (!row) return;
+  let strip = parts.composer.querySelector(".mw-attachment-strip");
+  if (!strip) {
+    strip = document.createElement("div");
+    strip.className = "mw-attachment-strip";
+    strip.setAttribute("role", "list");
+    strip.setAttribute("aria-label", "已附加文件");
+    parts.composer.insertBefore(strip, row);
+  }
+  strip.replaceChildren();
+  strip.hidden = state.attachments.length === 0;
+  state.attachments.forEach((item) => {
+    const chip = document.createElement("div");
+    chip.className = `mw-attachment-chip is-${item.status}`;
+    chip.setAttribute("role", "listitem");
+    chip.title = item.error || item.path;
+    const visual = fileVisual(item.name);
+    chip.append(createIcon(visual.icon, { size: 14, strokeWidth: 1.8 }));
+    const label = document.createElement("span");
+    label.className = "mw-attachment-name";
+    label.textContent = item.name;
+    chip.append(label);
+    if (item.status !== "ready") {
+      const status = document.createElement("span");
+      status.className = "mw-attachment-status";
+      status.textContent =
+        item.status === "uploading"
+          ? "上传中"
+          : item.status === "processing"
+            ? "解析中"
+            : "失败";
+      chip.append(status);
+    }
+    const remove = createLucideButton("X", `移除 ${item.name}`, "mw-attachment-remove");
+    remove.disabled = item.status === "uploading" || item.status === "processing";
+    remove.addEventListener("click", async () => {
+      state.attachments = state.attachments.filter(
+        (attachment) => attachment.id !== item.id,
+      );
+      renderAttachmentStrip(parts);
+      if (!state.workflowId || !item.path) return;
+      const paths = [item.path, item.extractedPath].filter(Boolean);
+      await Promise.allSettled(
+        paths.map((path) =>
+          state.nativeFetch(
+            `/api/editor/${state.workflowId}/file?path=${encodeURIComponent(path)}`,
+            { method: "DELETE" },
+          ),
+        ),
+      );
+    });
+    chip.append(remove);
+    strip.append(chip);
+  });
+}
+
+async function uploadAttachment(file, parts) {
+  const workflowId = state.workflowId;
+  if (!workflowId) return;
+  const storedName = sanitizedAttachmentName(file.name);
+  const item = {
+    id: `${Date.now()}-${state.attachmentSerial}`,
+    name: file.name || storedName,
+    path: `attachments/${storedName}`,
+    extractedPath: "",
+    status: "uploading",
+    error: "",
+  };
+  state.attachments.push(item);
+  renderAttachmentStrip(parts);
+  if (file.size > 100 * 1024 * 1024) {
+    item.status = "error";
+    item.error = "单个附件不能超过 100 MB";
+    renderAttachmentStrip(parts);
+    return;
+  }
+
+  try {
+    const body = new FormData();
+    body.append("files", file, storedName);
+    const response = await state.nativeFetch(
+      `/api/workflows/${workflowId}/artifacts/upload?target_dir=attachments`,
+      { method: "POST", body },
+    );
+    if (!response.ok) throw new Error(await responseError(response));
+    if (attachmentNeedsExtraction(storedName)) {
+      item.status = "processing";
+      renderAttachmentStrip(parts);
+      try {
+        item.extractedPath = await waitForAttachmentExtraction(
+          workflowId,
+          storedName,
+        );
+      } catch (error) {
+        item.status = "error";
+        item.error = String(error?.message || error);
+        renderAttachmentStrip(parts);
+        return;
+      }
+    }
+    item.status = "ready";
+  } catch (error) {
+    item.status = "error";
+    item.error = String(error?.message || error);
+  }
+  renderAttachmentStrip(parts);
+  scheduleEnhance();
+}
+
+function uploadAttachments(files, parts) {
+  const availableSlots = Math.max(0, 8 - state.attachments.length);
+  const selected = Array.from(files || []).slice(0, availableSlots);
+  selected.forEach((file) => void uploadAttachment(file, parts));
+}
+
 function createControlGroup(label) {
   const group = document.createElement("div");
   group.className = "mw-control-group";
@@ -425,10 +655,24 @@ function setLayout(layout) {
 
 function isAgentRunning(parts) {
   return (
+    Boolean(
+      parts.composer.querySelector(
+        '.mw-agent-action[data-mw-agent-action="stop"]',
+      ),
+    ) ||
     Array.from(parts.composer.querySelectorAll("button")).some(
       (button) => button.textContent?.trim() === "停止",
     ) || /执行中|思考中/.test(parts.thread.textContent || "")
   );
+}
+
+function isLiteAgentMode(parts) {
+  const active = Array.from(parts.header.querySelectorAll("button")).find(
+    (button) =>
+      button.classList.contains("font-medium") &&
+      /轻量|编辑助手|代码大师/.test(button.textContent || ""),
+  );
+  return Boolean(active) || selectedProfile()?.mode === "lite";
 }
 
 function computeAutoLayout(parts) {
@@ -796,7 +1040,7 @@ function updateAgentMeta(parts) {
     parts.agentPanel.style.setProperty("--mw-profile-accent", profile.accent);
   }
   const model =
-    profile?.mode === "lite"
+    isLiteAgentMode(parts)
       ? state.settings?.editor_ai_model_id
       : state.settings?.executor_model_id;
   const modelLabel = parts.header.querySelector(".mw-model-label");
@@ -804,6 +1048,14 @@ function updateAgentMeta(parts) {
   if (modelLabel && modelLabel.textContent !== nextModel) {
     modelLabel.textContent = nextModel;
     modelLabel.title = model ? `当前模型: ${model}` : "当前模型未配置";
+  }
+  const composerModel = parts.composer.querySelector(".mw-composer-model-text");
+  if (composerModel && composerModel.textContent !== nextModel) {
+    composerModel.textContent = nextModel;
+  }
+  const composerModelControl = parts.composer.querySelector(".mw-composer-model");
+  if (composerModelControl) {
+    composerModelControl.title = model ? `当前模型: ${model}` : "当前模型未配置";
   }
 }
 
@@ -992,6 +1244,7 @@ function openCommandPalette(parts, anchor) {
 
 function enhanceComposer(parts) {
   const row = parts.input.closest(".flex.gap-2");
+  if (!row) return;
   row?.classList.add("mw-composer-row");
   parts.input.classList.add("mw-agent-input");
   parts.input.setAttribute("aria-label", "向 Agent 发送指令");
@@ -999,7 +1252,7 @@ function enhanceComposer(parts) {
   if (parts.input instanceof HTMLTextAreaElement) {
     const grow = () => {
       parts.input.style.height = "auto";
-      parts.input.style.height = `${clamp(parts.input.scrollHeight, 76, 190)}px`;
+      parts.input.style.height = `${clamp(parts.input.scrollHeight, 104, 260)}px`;
     };
     if (parts.input.dataset.mwGrow !== "true") {
       parts.input.addEventListener("input", grow);
@@ -1008,17 +1261,136 @@ function enhanceComposer(parts) {
     grow();
   }
 
-  if (row && !row.querySelector(".mw-command-trigger")) {
-    const commandButton = createIconButton("⌘", "打开命令面板", "mw-command-trigger");
+  let commandButton = row.querySelector(".mw-command-trigger");
+  if (!commandButton) {
+    commandButton = createLucideButton(
+      "Command",
+      "打开命令面板",
+      "mw-command-trigger",
+    );
     commandButton.addEventListener("click", () => openCommandPalette(parts, commandButton));
     row.prepend(commandButton);
   }
-  const send = parts.composer.querySelector("[data-send-btn]");
-  if (send) {
-    send.title = "发送";
-    send.setAttribute("aria-label", "发送");
+  setControlIcon(commandButton, "Command", "打开命令面板");
+
+  let fileInput = parts.composer.querySelector(".mw-attachment-input");
+  if (!fileInput) {
+    fileInput = document.createElement("input");
+    fileInput.type = "file";
+    fileInput.multiple = true;
+    fileInput.className = "mw-attachment-input";
+    fileInput.setAttribute("aria-label", "选择要交给 Agent 的文件");
+    fileInput.addEventListener("change", () => {
+      uploadAttachments(fileInput.files, parts);
+      fileInput.value = "";
+    });
+    parts.composer.append(fileInput);
   }
+
+  let attachmentButton = row.querySelector(".mw-attachment-trigger");
+  if (!attachmentButton) {
+    attachmentButton = createLucideButton(
+      "Paperclip",
+      "添加文件",
+      "mw-attachment-trigger",
+    );
+    attachmentButton.addEventListener("click", () => fileInput.click());
+    commandButton.insertAdjacentElement("afterend", attachmentButton);
+  }
+
+  const imageButton = Array.from(row.querySelectorAll(":scope > button")).find(
+    (button) =>
+      !button.classList.contains("mw-command-trigger") &&
+      !button.classList.contains("mw-attachment-trigger") &&
+      !button.hasAttribute("data-send-btn") &&
+      /IMG|生图/.test(button.textContent || ""),
+  );
+  if (imageButton) {
+    imageButton.classList.add("mw-image-trigger");
+    setControlIcon(imageButton, "Sparkles", "生成示意图");
+  }
+
+  let composerModel = row.querySelector(".mw-composer-model");
+  if (!composerModel) {
+    composerModel = document.createElement("span");
+    composerModel.className = "mw-composer-model";
+    composerModel.append(createIcon("Bot", { size: 14, strokeWidth: 1.8 }));
+    const modelText = document.createElement("span");
+    modelText.className = "mw-composer-model-text";
+    composerModel.append(modelText);
+    row.append(composerModel);
+  }
+
+  const send = row.querySelector("[data-send-btn]");
+  const stop = Array.from(row.querySelectorAll(":scope > button")).find(
+    (button) =>
+      button.dataset.mwAgentAction === "stop" ||
+      button.textContent?.trim() === "停止",
+  );
+  const action = send || stop;
+  if (action) {
+    if (composerModel.nextElementSibling !== action) {
+      row.insertBefore(composerModel, action);
+    }
+    const stopping = !send;
+    action.classList.add("mw-agent-action");
+    action.dataset.mwAgentAction = stopping ? "stop" : "send";
+    setControlIcon(
+      action,
+      stopping ? "Square" : "ArrowUp",
+      stopping ? "终止 Agent" : "发送 (Enter)",
+    );
+    const busy = state.attachments.some(
+      (item) => item.status === "uploading" || item.status === "processing",
+    );
+    if (!stopping) {
+      action.disabled = busy || !parts.input.value.trim();
+    }
+    attachmentButton.disabled = stopping || busy;
+    fileInput.disabled = stopping || busy;
+  }
+
+  if (parts.input.dataset.mwAttachmentGuard !== "true") {
+    parts.input.dataset.mwAttachmentGuard = "true";
+    parts.input.addEventListener(
+      "keydown",
+      (event) => {
+        const busy = state.attachments.some(
+          (item) => item.status === "uploading" || item.status === "processing",
+        );
+        if (busy && event.key === "Enter" && !event.shiftKey) {
+          event.preventDefault();
+          event.stopImmediatePropagation();
+        }
+      },
+      true,
+    );
+  }
+
+  if (parts.composer.dataset.mwDropReady !== "true") {
+    parts.composer.dataset.mwDropReady = "true";
+    parts.composer.addEventListener("dragover", (event) => {
+      if (!event.dataTransfer?.types.includes("Files")) return;
+      event.preventDefault();
+      parts.composer.classList.add("is-dragging-file");
+    });
+    parts.composer.addEventListener("dragleave", (event) => {
+      if (!parts.composer.contains(event.relatedTarget)) {
+        parts.composer.classList.remove("is-dragging-file");
+      }
+    });
+    parts.composer.addEventListener("drop", (event) => {
+      if (!event.dataTransfer?.files?.length) return;
+      event.preventDefault();
+      parts.composer.classList.remove("is-dragging-file");
+      if (isAgentRunning(parts)) return;
+      uploadAttachments(event.dataTransfer.files, parts);
+    });
+  }
+
   updateComposerContext(parts);
+  renderAttachmentStrip(parts);
+  updateAgentMeta(parts);
 }
 
 function ensureJumpButton(parts) {
@@ -1186,6 +1558,9 @@ function enhanceEditor() {
     return;
   }
   if (state.workflowId !== workflowId || !state.preferences) {
+    if (state.workflowId && state.workflowId !== workflowId) {
+      state.attachments = [];
+    }
     state.workflowId = workflowId;
     state.preferences = loadPreferences(workflowId);
     state.activeProfile = selectedProfile();

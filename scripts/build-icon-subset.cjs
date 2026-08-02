@@ -8,6 +8,7 @@ const projectRoot = path.resolve(__dirname, '..');
 const outputPath = path.join(projectRoot, 'dist', 'assets', 'arhub-icons.js');
 const requestedIcons = [
   'ArrowDown',
+  'ArrowUp',
   'BookOpen',
   'Bot',
   'BrainCircuit',
@@ -52,6 +53,7 @@ const requestedIcons = [
   'PanelBottom',
   'PanelLeft',
   'PanelRight',
+  'Paperclip',
   'PanelsTopLeft',
   'Play',
   'Plus',
@@ -65,6 +67,7 @@ const requestedIcons = [
   'Settings',
   'SlidersHorizontal',
   'Sparkles',
+  'Square',
   'Sun',
   'TerminalSquare',
   'Trophy',

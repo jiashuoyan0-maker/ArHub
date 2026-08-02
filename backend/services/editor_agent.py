@@ -129,6 +129,7 @@ class AgentRun:
     workspace: Path
     sandbox: Path
     logs: list[str] = field(default_factory=list)
+    stream_text: str = ""
     diffs: list[dict[str, Any]] = field(default_factory=list)
     result: dict[str, Any] = field(default_factory=dict)
     running: bool = True
@@ -254,7 +255,13 @@ class EditorAgentManager:
         self.append_history(workflow_id, "user", message)
         self._save_result(
             workflow_id,
-            {"running": True, "logs": [], "diffs": [], "started_at": _utc_now()},
+            {
+                "running": True,
+                "logs": [],
+                "stream_text": "",
+                "diffs": [],
+                "started_at": _utc_now(),
+            },
         )
         await run.queue.put({"type": "progress", "message": "Agent 已启动"})
         run.task = asyncio.create_task(
@@ -271,6 +278,9 @@ class EditorAgentManager:
         current_file: str,
         compile_log: str,
     ) -> None:
+        last_stream_emit = 0.0
+        last_stream_snapshot = ""
+
         async def on_output(output: str) -> None:
             lines = [line for line in output.replace("\r", "").split("\n") if line]
             for line in lines:
@@ -278,6 +288,24 @@ class EditorAgentManager:
                 if len(run.logs) > MAX_LOG_LINES:
                     del run.logs[: len(run.logs) - MAX_LOG_LINES]
                 await run.queue.put({"type": "log", "message": line[-4000:]})
+
+        async def on_delta(delta: str) -> None:
+            nonlocal last_stream_emit, last_stream_snapshot
+            if not delta:
+                return
+            run.stream_text += delta
+            now = asyncio.get_running_loop().time()
+            if now - last_stream_emit < 0.05:
+                return
+            last_stream_emit = now
+            last_stream_snapshot = run.stream_text
+            await run.queue.put(
+                {
+                    "type": "progress",
+                    "message": run.stream_text,
+                    "streaming": True,
+                }
+            )
 
         context = (
             f"WORKFLOW MODE: {mode.upper()}\n"
@@ -294,8 +322,17 @@ class EditorAgentManager:
                 run.sandbox,
                 run.runner_id,
                 on_output=on_output,
+                on_delta=on_delta,
                 workspace_files=sorted(_workspace_files(run.sandbox)),
             )
+            if run.stream_text and last_stream_snapshot != run.stream_text:
+                await run.queue.put(
+                    {
+                        "type": "progress",
+                        "message": run.stream_text,
+                        "streaming": True,
+                    }
+                )
             run.diffs = build_diffs(run.workspace, run.sandbox)
             success = bool(runner_result.get("success"))
             summary = str(
@@ -319,6 +356,7 @@ class EditorAgentManager:
                 "auto_applied": auto_applied,
                 "diffs": pending_diffs,
                 "logs": list(run.logs),
+                "stream_text": run.stream_text,
                 "auto_compiled": any(path.lower().endswith(".pdf") for path in auto_applied),
                 "success": success,
             }
@@ -332,6 +370,7 @@ class EditorAgentManager:
                 "auto_applied": [],
                 "diffs": run.diffs,
                 "logs": list(run.logs),
+                "stream_text": run.stream_text,
                 "auto_compiled": False,
                 "success": False,
                 "cancelled": True,
@@ -348,6 +387,7 @@ class EditorAgentManager:
                 "auto_applied": [],
                 "diffs": run.diffs,
                 "logs": list(run.logs),
+                "stream_text": run.stream_text,
                 "auto_compiled": False,
                 "success": False,
             }
@@ -368,12 +408,14 @@ class EditorAgentManager:
             diffs = run.diffs if not run.running else []
             result = run.result
             running = run.running
+            stream_text = run.stream_text
         else:
             result = _read_json(self._result_path(workflow_id), {})
             if not isinstance(result, dict):
                 result = {}
             running = False
             logs = result.get("logs") if isinstance(result.get("logs"), list) else []
+            stream_text = str(result.get("stream_text") or "")
             diffs = build_diffs(workspace, self._sandbox(workflow_id))
             if result.get("running"):
                 result["running"] = False
@@ -389,6 +431,7 @@ class EditorAgentManager:
             "running": running,
             "logs": logs[offset:],
             "log_offset": len(logs),
+            "stream_text": stream_text,
             "diffs": diffs,
             "can_undo": bool(files),
             "applied_files": applied,

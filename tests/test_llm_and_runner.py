@@ -79,6 +79,111 @@ class LlmClientTests(unittest.IsolatedAsyncioTestCase):
             with self.assertRaisesRegex(RuntimeError, "Base URL is not configured"):
                 await llm_client.get_agent_config("executor")
 
+    async def test_chat_completion_streams_text_and_reassembles_tool_calls(self) -> None:
+        seen: dict[str, object] = {}
+        events = [
+            {"choices": [{"index": 0, "delta": {"role": "assistant"}}]},
+            {"choices": [{"index": 0, "delta": {"content": "Hel"}}]},
+            {
+                "choices": [
+                    {
+                        "index": 0,
+                        "delta": {"content": [{"type": "text", "text": "lo"}]},
+                    }
+                ]
+            },
+            {
+                "choices": [
+                    {
+                        "index": 0,
+                        "delta": {
+                            "tool_calls": [
+                                {
+                                    "index": 0,
+                                    "id": "call-1",
+                                    "type": "function",
+                                    "function": {
+                                        "name": "write_",
+                                        "arguments": '{"path":"RESULT',
+                                    },
+                                }
+                            ]
+                        },
+                    }
+                ]
+            },
+            {
+                "choices": [
+                    {
+                        "index": 0,
+                        "delta": {
+                            "tool_calls": [
+                                {
+                                    "index": 0,
+                                    "function": {
+                                        "name": "file",
+                                        "arguments": '.md"}',
+                                    },
+                                }
+                            ]
+                        },
+                        "finish_reason": "tool_calls",
+                    }
+                ],
+                "usage": {"total_tokens": 12},
+            },
+        ]
+        stream = "".join(
+            f"data: {json.dumps(event, ensure_ascii=False)}\n\n" for event in events
+        ) + "data: [DONE]\n\n"
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            seen["body"] = json.loads(request.content)
+            seen["accept"] = request.headers.get("accept")
+            return httpx.Response(
+                200,
+                headers={"Content-Type": "text/event-stream"},
+                content=stream.encode("utf-8"),
+            )
+
+        settings = {
+            "executor_base_url": "https://api.deepseek.com/v1",
+            "executor_api_key": "unit-test-key",
+            "executor_model_id": "deepseek-chat",
+        }
+        deltas: list[str] = []
+        client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
+        try:
+            with patch.object(
+                llm_client, "get_all_settings", AsyncMock(return_value=settings)
+            ):
+                payload = await llm_client.chat_completion(
+                    "executor",
+                    [{"role": "user", "content": "create RESULT.md"}],
+                    tools=[
+                        {
+                            "type": "function",
+                            "function": {"name": "write_file", "parameters": {}},
+                        }
+                    ],
+                    client=client,
+                    on_delta=deltas.append,
+                )
+        finally:
+            await client.aclose()
+
+        self.assertTrue(seen["body"]["stream"])
+        self.assertEqual(seen["accept"], "text/event-stream")
+        self.assertEqual(deltas, ["Hel", "lo"])
+        choice = payload["choices"][0]
+        self.assertEqual(choice["finish_reason"], "tool_calls")
+        self.assertEqual(choice["message"]["content"], "Hello")
+        tool_call = choice["message"]["tool_calls"][0]
+        self.assertEqual(tool_call["id"], "call-1")
+        self.assertEqual(tool_call["function"]["name"], "write_file")
+        self.assertEqual(tool_call["function"]["arguments"], '{"path":"RESULT.md"}')
+        self.assertEqual(payload["usage"], {"total_tokens": 12})
+
 
 class RunnerTests(unittest.IsolatedAsyncioTestCase):
     async def test_tool_loop_writes_file_and_returns_changed_files(self) -> None:
