@@ -16,6 +16,7 @@ try:
     from config import BACKEND_DIR, SKILLS_DIR, WORKSPACES_DIR
     from models.schemas import StepStatus, WorkflowStatus
     from services.claude_runner import claude_runner
+    from services.docx_exporter import export_markdown_to_docx
     from services.state_store import (
         append_log,
         create_checkpoint,
@@ -31,6 +32,7 @@ except ModuleNotFoundError:  # Package import used by tests and library consumer
     from backend.config import BACKEND_DIR, SKILLS_DIR, WORKSPACES_DIR
     from backend.models.schemas import StepStatus, WorkflowStatus
     from backend.services.claude_runner import claude_runner
+    from backend.services.docx_exporter import export_markdown_to_docx
     from backend.services.state_store import (
         append_log,
         create_checkpoint,
@@ -148,6 +150,54 @@ def _existing_expected_files(workspace: Path, step: StepDef) -> list[str]:
         if (workspace / name).exists():
             result.append(name)
     return result
+
+
+def _docx_source_file(workspace: Path, step: StepDef) -> str | None:
+    candidates = [step.primary_output, *step.output_files]
+    for output_name in candidates:
+        if not output_name or Path(output_name).suffix.lower() != ".docx":
+            continue
+        source = Path(output_name).with_suffix(".md")
+        if (workspace / source).is_file():
+            return source.as_posix()
+    return None
+
+
+async def _run_docx_export_step(
+    workflow: dict[str, Any], step: StepDef, workspace: Path
+) -> dict[str, Any]:
+    source_file = _docx_source_file(workspace, step)
+    exported = await export_markdown_to_docx(
+        workspace,
+        source_file=source_file,
+        template=workflow["template"],
+    )
+    if not exported.get("success", True):
+        raise RuntimeError(str(exported.get("error") or "DOCX export failed"))
+
+    output_path = Path(exported["output_path"]).resolve()
+    try:
+        output_file = output_path.relative_to(workspace).as_posix()
+    except ValueError as exc:
+        raise RuntimeError("DOCX exporter returned a file outside the workspace") from exc
+
+    source_path = Path(exported.get("source_path") or source_file or "")
+    engine = str(exported.get("engine") or "unknown")
+    output = f"Exported {source_path.name} to {output_file} with the {engine} engine."
+    export_log = str(exported.get("log") or "").strip()
+    if export_log:
+        output += f"\n{export_log}"
+
+    return {
+        "success": True,
+        "output": output,
+        "output_files": [output_file],
+        "engine": engine,
+        "source_path": str(source_path),
+        "output_path": str(output_path),
+        "size": exported.get("size"),
+        "log": export_log,
+    }
 
 
 def _primary_preview(workspace: Path, step: StepDef) -> tuple[str | None, str | None]:
@@ -274,16 +324,23 @@ async def run_single_step(workflow_id: str, skill_name: str) -> dict[str, Any]:
     arguments = workflow["title"]
     if feedback:
         arguments += f"\n\nUser checkpoint feedback:\n{feedback}"
-    result = await claude_runner.run_skill(
-        skill_name,
-        arguments,
-        workspace,
-        f"{workflow_id}:{skill_name}",
-        on_output=on_output,
-        extra_params=params,
-        workspace_files=_workspace_file_list(workspace),
-        context_summary=str(feedback or ""),
-    )
+    if skill_name == "docx-export":
+        try:
+            result = await _run_docx_export_step(workflow, step, workspace)
+        except Exception as exc:
+            log.exception("DOCX export failed for workflow %s", workflow_id)
+            result = {"success": False, "error": f"DOCX export failed: {exc}"}
+    else:
+        result = await claude_runner.run_skill(
+            skill_name,
+            arguments,
+            workspace,
+            f"{workflow_id}:{skill_name}",
+            on_output=on_output,
+            extra_params=params,
+            workspace_files=_workspace_file_list(workspace),
+            context_summary=str(feedback or ""),
+        )
 
     latest = await _read_workflow(workflow_id)
     if result.get("cancelled") or (

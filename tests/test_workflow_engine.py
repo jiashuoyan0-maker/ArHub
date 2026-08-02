@@ -11,6 +11,7 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from backend.services import state_store, workflow_engine
+from backend.services.docx_exporter import DocxExportError
 
 
 class WorkflowEngineTests(unittest.IsolatedAsyncioTestCase):
@@ -64,6 +65,84 @@ class WorkflowEngineTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(workflow["status"], "completed")
         self.assertEqual(workflow["steps"][0]["status"], "completed")
         self.assertIn("workflow_completed", [event["type"] for event in self.events])
+
+    async def test_docx_export_runs_as_native_workflow_step(self) -> None:
+        workflow_id = await workflow_engine.create_new_workflow(
+            "literature_review", "Review the literature", {}, False
+        )
+        workflow = await self._get(workflow_id)
+        workspace = Path(workflow["workspace_dir"])
+        (workspace / "LITERATURE_REVIEW.md").write_text(
+            "# Literature review\n", encoding="utf-8"
+        )
+
+        async def export_docx(*_args, **_kwargs) -> dict:
+            output = workspace / "LITERATURE_REVIEW.docx"
+            output.write_bytes(b"docx")
+            return {
+                "success": True,
+                "engine": "python",
+                "source_path": workspace / "LITERATURE_REVIEW.md",
+                "output_path": output,
+                "size": output.stat().st_size,
+                "log": "exported",
+            }
+
+        mock_exporter = AsyncMock(side_effect=export_docx)
+        mock_runner = AsyncMock()
+        with (
+            patch.object(workflow_engine, "export_markdown_to_docx", mock_exporter),
+            patch.object(workflow_engine.claude_runner, "run_skill", mock_runner),
+        ):
+            result = await workflow_engine.run_single_step(
+                workflow_id, "docx-export"
+            )
+
+        mock_exporter.assert_awaited_once_with(
+            workspace,
+            source_file="LITERATURE_REVIEW.md",
+            template="literature_review",
+        )
+        mock_runner.assert_not_awaited()
+        workflow = await self._get(workflow_id)
+        step = next(
+            item for item in workflow["steps"] if item["skill_name"] == "docx-export"
+        )
+        self.assertEqual(step["status"], "completed")
+        self.assertEqual(step["output_files"], ["LITERATURE_REVIEW.docx"])
+        self.assertEqual(result["output_files"], ["LITERATURE_REVIEW.docx"])
+        self.assertIn("step_completed", [event["type"] for event in self.events])
+
+    async def test_docx_export_failure_marks_step_and_workflow_failed(self) -> None:
+        workflow_id = await workflow_engine.create_new_workflow(
+            "literature_review", "Review the literature", {}, False
+        )
+        workflow = await self._get(workflow_id)
+        workspace = Path(workflow["workspace_dir"])
+        (workspace / "LITERATURE_REVIEW.md").write_text(
+            "# Literature review\n", encoding="utf-8"
+        )
+
+        mock_exporter = AsyncMock(
+            side_effect=DocxExportError("converter unavailable")
+        )
+        mock_runner = AsyncMock()
+        with (
+            patch.object(workflow_engine, "export_markdown_to_docx", mock_exporter),
+            patch.object(workflow_engine.claude_runner, "run_skill", mock_runner),
+            self.assertRaisesRegex(RuntimeError, "converter unavailable"),
+        ):
+            await workflow_engine.run_single_step(workflow_id, "docx-export")
+
+        mock_runner.assert_not_awaited()
+        workflow = await self._get(workflow_id)
+        step = next(
+            item for item in workflow["steps"] if item["skill_name"] == "docx-export"
+        )
+        self.assertEqual(workflow["status"], "failed")
+        self.assertEqual(step["status"], "failed")
+        self.assertIn("converter unavailable", step["error_message"])
+        self.assertIn("step_failed", [event["type"] for event in self.events])
 
     async def test_checkpoint_approve_and_feedback_are_persistent(self) -> None:
         workflow_id = await workflow_engine.create_new_workflow(
