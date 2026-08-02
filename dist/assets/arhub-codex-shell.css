@@ -413,6 +413,23 @@ html.mw-codex-ui ::-webkit-scrollbar-track {
   border-top: 1px solid var(--mx-border);
 }
 
+.mw-shell-community-link > span {
+  min-width: 0;
+  flex: 1;
+}
+
+.mw-shell-community-link .mw-shell-external-indicator {
+  flex: 0 0 auto;
+  margin-left: auto;
+  opacity: 0.55;
+  transition: opacity 150ms ease;
+}
+
+.mw-shell-community-link:hover .mw-shell-external-indicator,
+.mw-shell-community-link:focus-visible .mw-shell-external-indicator {
+  opacity: 0.9;
+}
+
 /* Compact top bar */
 
 #mw-codex-topbar {

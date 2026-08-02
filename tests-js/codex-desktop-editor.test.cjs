@@ -14,6 +14,8 @@ test('Codex-inspired editor layer loads last and keeps contextual panels accessi
   const css = read('dist', 'assets', 'arhub-codex-desktop.css');
   const studioScript = read('dist', 'assets', 'arhub-editor-studio.js');
   const studioCss = read('dist', 'assets', 'arhub-editor-studio.css');
+  const shellScript = read('dist', 'assets', 'arhub-codex-shell.js');
+  const shellCss = read('dist', 'assets', 'arhub-codex-shell.css');
 
   assert.ok(html.indexOf('/assets/arhub-codex-desktop.css') > html.indexOf('/assets/arhub-codex-shell.css'));
   assert.ok(html.indexOf('/assets/arhub-codex-desktop.js') > html.indexOf('/assets/arhub-codex-shell.js'));
@@ -33,4 +35,9 @@ test('Codex-inspired editor layer loads last and keeps contextual panels accessi
   assert.match(studioCss, /#mw-codex-sidebar/);
   assert.match(studioCss, /data-arhub-codex-context="open"/);
   assert.match(studioCss, /prefers-reduced-motion:\s*reduce/);
+  assert.match(shellScript, /community\.href = "https:\/\/linux\.do\/"/);
+  assert.match(shellScript, /community\.target = "_blank"/);
+  assert.match(shellScript, /community\.rel = "noopener noreferrer"/);
+  assert.match(shellScript, /footer\.append\(extensions, community\)/);
+  assert.match(shellCss, /\.mw-shell-community-link/);
 });

@@ -310,7 +310,23 @@ function buildSidebar() {
   extensionLabel.textContent = "扩展";
   extensions.append(extensionLabel);
   extensions.addEventListener("click", openExtensions);
-  footer.append(extensions);
+
+  const community = document.createElement("a");
+  community.href = "https://linux.do/";
+  community.target = "_blank";
+  community.rel = "noopener noreferrer";
+  community.className = "mw-shell-nav-link mw-shell-community-link";
+  community.dataset.mwCommunity = "linux-do";
+  community.setAttribute("aria-label", "访问 Linux DO 社区（在浏览器中打开）");
+  community.append(createIcon("message"));
+  const communityLabel = document.createElement("span");
+  communityLabel.textContent = "Linux DO 社区";
+  community.append(communityLabel);
+  const externalIndicator = createIcon("external", 13);
+  externalIndicator.classList.add("mw-shell-external-indicator");
+  community.append(externalIndicator);
+
+  footer.append(extensions, community);
 
   sidebar.append(brand, newTask, primary, recent, footer);
   return sidebar;

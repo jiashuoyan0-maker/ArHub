@@ -15,3 +15,5 @@
 *.otf binary
 *.woff binary
 *.woff2 binary
+
+dist/assets/arhub-icons.js text eol=lf
