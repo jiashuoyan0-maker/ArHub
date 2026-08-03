@@ -125,6 +125,13 @@ test('automatic Lite publishing only trusts successful main pushes from this rep
   assert.match(workflow, /workflow_run\.head_repository\.full_name == github\.repository/);
   assert.match(workflow, /workflow_run\.head_sha == github\.sha/);
   assert.match(workflow, /cancel-in-progress:\s*true/);
+  assert.match(workflow, /detect-runtime-change:/);
+  assert.match(workflow, /fetch-depth: 2/);
+  assert.match(workflow, /packaging\/runtime-bundle\.json/);
+  assert.match(workflow, /packaging\/runtime-lock\.json/);
+  assert.match(workflow, /packaging\/runtime-manifest\.json/);
+  assert.match(workflow, /packaging\/python-requirements\.lock\.txt/);
+  assert.match(workflow, /needs\.detect-runtime-change\.outputs\.changed == 'true'/);
   assert.match(workflow, /-RuntimeProfile lite\b/);
   assert.match(workflow, /-SkipTests\b/);
   assert.match(workflow, /--target '\$\{\{ github\.event\.workflow_run\.head_sha \|\| github\.sha \}\}'/);

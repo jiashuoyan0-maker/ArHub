@@ -12,19 +12,54 @@ concurrency:
   cancel-in-progress: true
 
 permissions:
+  actions: read
   contents: write
   id-token: write
   attestations: write
 
 jobs:
+  detect-runtime-change:
+    runs-on: windows-latest
+    outputs:
+      changed: ${{ steps.runtime.outputs.changed }}
+    steps:
+      - name: Check out candidate source
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
+          fetch-depth: 2
+
+      - name: Detect runtime lock changes
+        id: runtime
+        shell: powershell
+        run: |
+          if ('${{ github.event_name }}' -eq 'workflow_dispatch') {
+            'changed=true' | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
+            exit 0
+          }
+          $parent = git rev-parse 'HEAD^'
+          if ($LASTEXITCODE -ne 0) { throw 'Unable to resolve the parent commit.' }
+          $runtimeFiles = @(
+            'packaging/runtime-bundle.json'
+            'packaging/runtime-lock.json'
+            'packaging/runtime-manifest.json'
+            'packaging/python-requirements.lock.txt'
+          )
+          $paths = @(git diff --name-only $parent HEAD -- $runtimeFiles)
+          if ($LASTEXITCODE -ne 0) { throw 'Unable to compare runtime lock files.' }
+          $changed = if ($paths.Count -gt 0) { 'true' } else { 'false' }
+          "changed=$changed" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
+
   build-candidate:
+    needs: detect-runtime-change
     if: >-
-      github.event_name == 'workflow_dispatch' ||
+      needs.detect-runtime-change.outputs.changed == 'true' &&
+      (github.event_name == 'workflow_dispatch' ||
       (github.event.workflow_run.conclusion == 'success' &&
       github.event.workflow_run.event == 'push' &&
       github.event.workflow_run.head_branch == 'main' &&
       github.event.workflow_run.head_repository.full_name == github.repository &&
-      github.event.workflow_run.head_sha == github.sha)
+      github.event.workflow_run.head_sha == github.sha))
     runs-on: [self-hosted, Windows, X64, arhub-release]
     timeout-minutes: 180
     env:
