@@ -41,11 +41,12 @@ ArHub 不把 Agent 限制在孤立的聊天框里。日常操作以对话为中�
 
 [前往 GitHub Releases 下载最新 Windows 安装包](https://github.com/jiashuoyan0-maker/ArHub/releases/latest)。
 
-`v1.0.10` 提供约 326 MiB 的 Lite 安装包，保留桌面端、开放模型 Agent、基础文档
-处理和本机 Claude Code 接入。需要完整 TeX、Draw.io、Pandoc、Git 与科学计算工具链
-的用户可以继续使用 Full 构建流程。
+`v1.0.11` 同时发布两种安装包：约 326 MiB 的 **Lite** 与约 1.56 GiB 的 **Full**。
+Full 内置完整离线运行时（TeX、Draw.io、Pandoc、Git 与科学计算工具链），适合不想
+自行配置环境的新手；Lite 保留桌面端、开放模型 Agent、基础文档处理和本机 Claude Code
+接入，体积更小。两者共用 `%APPDATA%\ArHub` 中的设置与工作区，可以随时切换。
 
-`v1.0.10` 已切换为引导式安装：可以保留默认目录，也可以选择其他磁盘或目录。程序和
+安装器使用引导式安装：可以保留默认目录，也可以选择其他磁盘或目录。程序和
 内置运行时随所选安装目录移动；模型设置、凭证、日志和工作区仍保存在 `%APPDATA%\ArHub`，升级
 或卸载程序不会删除这些用户数据。完整路径规则见 [docs/PATHS.md](docs/PATHS.md)。
 
@@ -57,7 +58,7 @@ ArHub 不把 Agent 限制在孤立的聊天框里。日常操作以对话为中�
 > 也不要从网盘或第三方镜像下载安装包。
 
 ```powershell
-Get-FileHash .\ArHub-Setup-1.0.10-lite-x64.exe -Algorithm SHA256
+Get-FileHash .\ArHub-Setup-1.0.11-lite-x64.exe -Algorithm SHA256
 ```
 
 将输出与同一 Release 中的 `SHA256SUMS.txt` 对应条目逐字核对。正式发布还包含
@@ -149,7 +150,7 @@ API Key 只应保存在本机设置中。不要把 Key 写入仓库、截图、I
 | DOCX 与提取 | 可运行源码 | Node 高保真引擎、python-docx fallback、PDF/DOCX 文本提取 |
 | 前端 | 恢复产物 | Codex 式动态工作台、亮暗主题；尚无可复现的模块化前端构建 |
 | Skills 与扩展 | 明文可审查 | Skill、模板和声明式 profile 不需要激活或解密 |
-| Windows 安装包 | `v1.0.10` 已发布 | Lite runtime、NSIS、SBOM、校验和、自定义安装目录与 GitHub 发布工作流；官方产物当前未签名 |
+| Windows 安装包 | `v1.0.11` 已发布 | Lite + Full runtime、NSIS、SBOM、校验和、自定义安装目录与 GitHub 发布工作流；官方产物当前未签名 |
 
 ### 从源码运行
 
@@ -195,7 +196,7 @@ $env:ARHUB_RUNTIME_DIR = 'C:\path\to\verified\runtime'
 npm run runtime:check
 npm run package:win:unsigned
 powershell -NoProfile -ExecutionPolicy Bypass -File scripts\smoke-test-installer.ps1 `
-  -InstallerPath release\ArHub-Setup-1.0.10-lite-x64.exe -RequireUnsigned
+  -InstallerPath release\ArHub-Setup-1.0.11-lite-x64.exe -RequireUnsigned
 ```
 
 ### 数据与扩展
@@ -236,8 +237,10 @@ powershell -NoProfile -ExecutionPolicy Bypass -File scripts\smoke-test-installer
 
 ### Lite / Full 安装包
 
-- `Lite`：保留桌面端、FastAPI、开放模型 Agent、基础文档/表格处理；可选择本机 Claude Code。移除内置 Node/Claude、Git、TeX、Draw.io、Pandoc 和大型机器学习库。
-- `Full`：保留完整锁定运行时，适合需要 LaTeX、Draw.io、Pandoc 和本地科学计算工具链的用户。
+自 `v1.0.11` 起，两种安装包都会随 Release 一起发布：
+
+- `Lite`（约 326 MiB）：保留桌面端、FastAPI、开放模型 Agent、基础文档/表格处理；可选择本机 Claude Code。移除内置 Node/Claude、Git、TeX、Draw.io、Pandoc 和大型机器学习库。
+- `Full`（约 1.56 GiB）：内置完整锁定运行时，开箱即用，适合需要 LaTeX、Draw.io、Pandoc 和本地科学计算工具链的用户，以及不想自行配置环境的初学者。
 - 两个版本共用 `%APPDATA%\ArHub` 中的设置与工作区，可以在不迁移数据的情况下切换。
 - 本机 Claude Code 模式会使用用户终端中已经安装并登录的 Claude Code；开放模型模式继续支持 DeepSeek、GLM、OpenAI-compatible API。
 
@@ -265,12 +268,15 @@ the task so work can be resumed, reviewed, and audited later.
 
 [Download the latest Windows installer from GitHub Releases](https://github.com/jiashuoyan0-maker/ArHub/releases/latest).
 
-`v1.0.10` provides a Lite installer of approximately 326 MiB. It keeps the
-desktop app, open-model agent, basic document processing, and local Claude Code
-integration. Users who need the complete TeX, Draw.io, Pandoc, Git, and local
-scientific-computing toolchain can continue to use the Full build profile.
+`v1.0.11` ships both installers: a Lite package of approximately 326 MiB and a
+Full package of approximately 1.56 GiB. Full bundles the complete offline
+runtime (TeX, Draw.io, Pandoc, Git, and the scientific-computing toolchain) for
+users who want everything out of the box. Lite keeps the desktop app,
+open-model agent, basic document processing, and local Claude Code integration.
+Both profiles share `%APPDATA%\ArHub`, so settings and workspaces remain
+swappable without migration.
 
-`v1.0.10` uses an assisted installer: users can keep the default destination or
+The installer is assisted: users can keep the default destination or
 choose another drive and directory. Application files and the bundled runtime
 follow the selected destination, while model settings, credentials, logs, and workspaces remain in
 `%APPDATA%\ArHub` and survive upgrades or uninstall. See
@@ -286,7 +292,7 @@ follow the selected destination, while model settings, credentials, logs, and wo
 > or any other system-wide protection, and do not use third-party mirrors.
 
 ```powershell
-Get-FileHash .\ArHub-Setup-1.0.10-lite-x64.exe -Algorithm SHA256
+Get-FileHash .\ArHub-Setup-1.0.11-lite-x64.exe -Algorithm SHA256
 ```
 
 Compare the result character by character with the matching entry in
@@ -381,12 +387,15 @@ connection test does not guarantee identical workflow capabilities.
 
 ### Lite and Full installers
 
+Both profiles ship with every Release from `v1.0.11`:
+
 - **Lite** keeps Electron, the FastAPI core, the open-model agent, and basic
   document/spreadsheet libraries. It expects a local Claude Code installation
   when that runtime is selected and omits bundled Node/Claude, Git, TeX,
   Draw.io, Pandoc, and large optional ML packages.
-- **Full** keeps the complete locked runtime for LaTeX, Draw.io, Pandoc, and
-  local scientific-computing workflows.
+- **Full** bundles the complete locked runtime for LaTeX, Draw.io, Pandoc, and
+  local scientific-computing workflows, so beginners do not need to configure
+  anything.
 - Both profiles use `%APPDATA%\ArHub`, so settings and workspaces remain shared.
 
 API keys should be stored only in local settings. Never place keys in the
@@ -404,7 +413,7 @@ that has previously been exposed in a chat or another external location.
 | DOCX and extraction | Runnable source | High-fidelity Node engine, python-docx fallback, and PDF/DOCX text extraction |
 | Frontend | Recovered artifacts | Codex-style dynamic workspace and light/dark themes; no reproducible modular frontend build yet |
 | Skills and extensions | Plain reviewable files | Skills, templates, and declarative profiles require no activation or decryption |
-| Windows installer | `v1.0.10` released | Lite runtime, NSIS, SBOMs, checksums, custom install paths, and GitHub release workflow; official artifacts are currently unsigned |
+| Windows installer | `v1.0.11` released | Lite + Full runtime, NSIS, SBOMs, checksums, custom install paths, and GitHub release workflow; official artifacts are currently unsigned |
 
 ### Run from source
 
@@ -453,7 +462,7 @@ npm run runtime:check
 npm run package:win:lite
 # or: npm run package:win:full
 powershell -NoProfile -ExecutionPolicy Bypass -File scripts\smoke-test-installer.ps1 `
-  -InstallerPath release\ArHub-Setup-1.0.10-lite-x64.exe -RequireUnsigned
+  -InstallerPath release\ArHub-Setup-1.0.11-lite-x64.exe -RequireUnsigned
 ```
 
 ### Data and extensions

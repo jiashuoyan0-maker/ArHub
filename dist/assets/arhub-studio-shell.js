@@ -315,6 +315,8 @@ function installRuntimeSettings(main) {
       ["max", "最大"],
     ]);
     const claudeEffort = reasoning.cloneNode(true);
+    const reviewerReasoning = reasoning.cloneNode(true);
+    const editorReasoning = reasoning.cloneNode(true);
     const claudeBin = document.createElement("input");
     claudeBin.type = "text";
     claudeBin.placeholder = "claude";
@@ -329,8 +331,20 @@ function installRuntimeSettings(main) {
       reasoning,
       "executor_reasoning_effort",
     );
+    const reviewerControl = runtimeField(
+      "审稿者强度",
+      reviewerReasoning,
+      "reviewer_reasoning_effort",
+    );
+    const editorControl = runtimeField(
+      "编辑器强度",
+      editorReasoning,
+      "editor_ai_reasoning_effort",
+    );
     providerControl.dataset.runtimeScope = "open";
     reasoningControl.dataset.runtimeScope = "open";
+    reviewerControl.dataset.runtimeScope = "open";
+    editorControl.dataset.runtimeScope = "open";
     const binControl = runtimeField("Claude Code", claudeBin, "claude_bin");
     const modelControl = runtimeField("Claude 模型", claudeModel, "claude_model");
     const effortControl = runtimeField("Claude 强度", claudeEffort, "claude_effort");
@@ -341,6 +355,8 @@ function installRuntimeSettings(main) {
       runtimeControl,
       providerControl,
       reasoningControl,
+      reviewerControl,
+      editorControl,
       binControl,
       modelControl,
       effortControl,

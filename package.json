@@ -1,7 +1,7 @@
 {
   "name": "arhub",
   "productName": "ArHub",
-  "version": "1.0.10",
+  "version": "1.0.11",
   "description": "ArHub — AI 科研助手工作台（Electron + FastAPI + 技能工作流）",
   "main": "main.js",
   "author": "jiashuoyan0-maker",

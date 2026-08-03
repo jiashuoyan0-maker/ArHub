@@ -80,7 +80,7 @@ installed copy of ArHub.
 
 1. Run `npm ci`, `npm test`, and `npm run audit:open-source`.
 2. Update `package.json` to the release version and commit all lock changes.
-3. Create and push the matching tag, for example `v1.0.10`.
+3. Create and push the matching tag, for example `v1.0.11`.
 4. The **Windows Release** workflow downloads the locked runtime, checks
    every archive against the committed hashes, builds
    the unsigned installer, requires all ArHub-owned executables to be `NotSigned`, emits CycloneDX SBOMs and
@@ -109,7 +109,7 @@ Run the same installation gate locally with:
 
 ```powershell
 powershell -NoProfile -ExecutionPolicy Bypass -File scripts\smoke-test-installer.ps1 `
-  -InstallerPath release\ArHub-Setup-1.0.10-lite-x64.exe -RequireUnsigned
+  -InstallerPath release\ArHub-Setup-1.0.11-lite-x64.exe -RequireUnsigned
 ```
 
 ## Automated maintenance
