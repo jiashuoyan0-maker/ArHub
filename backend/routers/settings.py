@@ -13,11 +13,21 @@ from pydantic import BaseModel, Field
 
 try:
     from config import CLAUDE_BIN
-    from services.llm_client import AGENT_KEYS, test_connection
+    from services.llm_client import (
+        AGENT_KEYS,
+        get_agent_config,
+        provider_summary,
+        test_connection,
+    )
     from services.state_store import get_all_settings, save_settings
 except ModuleNotFoundError:  # Package import used by tests and library consumers.
     from backend.config import CLAUDE_BIN
-    from backend.services.llm_client import AGENT_KEYS, test_connection
+    from backend.services.llm_client import (
+        AGENT_KEYS,
+        get_agent_config,
+        provider_summary,
+        test_connection,
+    )
     from backend.services.state_store import get_all_settings, save_settings
 
 router = APIRouter(prefix="/api/settings", tags=["settings"])
@@ -26,18 +36,31 @@ DEFAULT_SETTINGS: dict[str, str] = {
     "executor_base_url": "",
     "executor_api_key": "",
     "executor_model_id": "",
+    "executor_provider": "auto",
+    "executor_reasoning_effort": "default",
+    "executor_request_options": "",
     "reviewer_base_url": "",
     "reviewer_api_key": "",
     "reviewer_model_id": "",
+    "reviewer_provider": "auto",
+    "reviewer_reasoning_effort": "default",
+    "reviewer_request_options": "",
     "editor_ai_base_url": "",
     "editor_ai_api_key": "",
     "editor_ai_model_id": "",
+    "editor_ai_provider": "auto",
+    "editor_ai_reasoning_effort": "default",
+    "editor_ai_request_options": "",
     "minimax_api_key": "",
     "minimax_group_id": "",
     "gemini_api_key": "",
     "gpt_image_api_key": "",
     "gpt_image_base_url": "",
+    "agent_runtime": "openai_compatible",
     "claude_bin": "claude",
+    "claude_model": "",
+    "claude_effort": "high",
+    "claude_permission_mode": "acceptEdits",
 }
 SENSITIVE_KEYS = {
     key
@@ -45,6 +68,28 @@ SENSITIVE_KEYS = {
     if key.endswith("api_key") or key.endswith("token") or key.endswith("secret")
 }
 _KEY_RE = re.compile(r"^[A-Za-z][A-Za-z0-9_.-]{0,127}$")
+_SETTING_CHOICES = {
+    "agent_runtime": {"openai_compatible", "local_claude"},
+    "claude_effort": {"default", "low", "medium", "high", "xhigh", "max"},
+    "claude_permission_mode": {"acceptEdits", "auto", "manual"},
+}
+for _agent_name in AGENT_KEYS:
+    _SETTING_CHOICES[f"{_agent_name}_provider"] = {
+        "auto",
+        "deepseek",
+        "glm",
+        "openai",
+        "generic",
+    }
+    _SETTING_CHOICES[f"{_agent_name}_reasoning_effort"] = {
+        "default",
+        "off",
+        "low",
+        "medium",
+        "high",
+        "xhigh",
+        "max",
+    }
 
 
 class SettingsUpdate(BaseModel):
@@ -82,6 +127,9 @@ async def update_settings(body: SettingsUpdate) -> dict[str, Any]:
             raise HTTPException(status_code=400, detail=f"Invalid setting key: {key}")
         if len(value) > 200_000:
             raise HTTPException(status_code=400, detail=f"Setting is too large: {key}")
+        choices = _SETTING_CHOICES.get(key)
+        if choices is not None and value not in choices:
+            raise HTTPException(status_code=400, detail=f"Invalid value for {key}: {value}")
         if "*" in value and (key in SENSITIVE_KEYS or key.endswith("api_key")):
             continue
         cleaned[key] = value
@@ -94,6 +142,17 @@ async def test_agent_connection(agent: str) -> dict[str, Any]:
     if agent not in AGENT_KEYS:
         raise HTTPException(status_code=404, detail=f"Unknown agent: {agent}")
     return await test_connection(agent)
+
+
+@router.get("/providers")
+async def provider_status() -> dict[str, Any]:
+    agents: dict[str, Any] = {}
+    for agent in AGENT_KEYS:
+        try:
+            agents[agent] = {"configured": True, **provider_summary(await get_agent_config(agent))}
+        except (RuntimeError, ValueError) as exc:
+            agents[agent] = {"configured": False, "message": str(exc)}
+    return {"agents": agents}
 
 
 async def _version(path: str) -> str:
@@ -110,20 +169,51 @@ async def _version(path: str) -> str:
         return f"unavailable: {type(exc).__name__}"
 
 
+def _resolved_claude_path(value: str) -> str | None:
+    raw = (value or "").strip().strip('"')
+    if not raw:
+        return None
+    supplied = Path(raw).expanduser()
+    candidate = supplied if supplied.is_file() else None
+    if candidate is None:
+        discovered = shutil.which(raw)
+        if discovered:
+            candidate = Path(discovered)
+    if candidate is None or not candidate.is_file():
+        return None
+    if candidate.suffix.lower() in {".cmd", ".bat"}:
+        native = (
+            candidate.parent
+            / "node_modules"
+            / "@anthropic-ai"
+            / "claude-code"
+            / "bin"
+            / "claude.exe"
+        )
+        if native.is_file():
+            candidate = native
+    return str(candidate.resolve())
+
+
 @router.get("/detect-claude")
 async def detect_claude() -> dict[str, Any]:
-    """Legacy compatibility endpoint; the open runtime does not require Claude CLI."""
+    """Detect usable local and bundled Claude Code executables."""
+    settings = {**DEFAULT_SETTINGS, **(await get_all_settings())}
     candidates: list[str] = []
-    configured = Path(CLAUDE_BIN)
-    if configured.is_file():
-        candidates.append(str(configured))
-    discovered = shutil.which("claude")
-    if discovered and discovered not in candidates:
-        candidates.append(discovered)
+    for value in (settings.get("claude_bin", "claude"), str(CLAUDE_BIN), "claude"):
+        resolved = _resolved_claude_path(value)
+        if resolved and resolved.casefold() not in {item.casefold() for item in candidates}:
+            candidates.append(resolved)
     details = [{"path": path, "version": await _version(path)} for path in candidates]
     return {
         "recommended": candidates[0] if candidates else None,
         "candidates": details,
         "required": False,
-        "message": "ArHub's open Agent runtime does not require Claude CLI.",
+        "selected_runtime": settings["agent_runtime"],
+        "compatible": bool(candidates),
+        "message": (
+            "Local Claude Code is ready."
+            if candidates
+            else "No local Claude Code executable was detected; use the open model runtime."
+        ),
     }

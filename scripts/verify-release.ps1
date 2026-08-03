@@ -2,6 +2,8 @@
 param(
     [string]$ReleaseDir,
     [string]$PublisherName = $env:ARHUB_PUBLISHER_NAME,
+    [ValidateSet('full', 'lite')]
+    [string]$RuntimeProfile = $(if ($env:ARHUB_RUNTIME_PROFILE) { $env:ARHUB_RUNTIME_PROFILE } else { 'full' }),
     [switch]$AllowUnsigned,
     [switch]$RequireUnsigned
 )
@@ -14,7 +16,13 @@ $release = (Resolve-Path -LiteralPath $ReleaseDir).Path
 $issues = New-Object System.Collections.Generic.List[string]
 if ($AllowUnsigned -and $RequireUnsigned) { throw 'AllowUnsigned and RequireUnsigned are mutually exclusive.' }
 
-$installers = @(Get-ChildItem -LiteralPath $release -File -Filter 'ArHub-Setup-*.exe')
+$installers = @(
+    Get-ChildItem -LiteralPath $release -File -Filter 'ArHub-Setup-*.exe' |
+        Where-Object {
+            if ($RuntimeProfile -eq 'lite') { $_.Name -like 'ArHub-Setup-*-lite-*.exe' }
+            else { $_.Name -notlike 'ArHub-Setup-*-lite-*.exe' }
+        }
+)
 if ($installers.Count -ne 1) { $issues.Add("Expected exactly one installer, found $($installers.Count).") }
 $latest = Join-Path $release 'latest.yml'
 if (-not (Test-Path -LiteralPath $latest -PathType Leaf)) { $issues.Add('latest.yml is missing.') }
@@ -38,13 +46,17 @@ $requiredLayout = @(
     'resources\app\dist\assets\arhub-glass.css',
     'resources\app\node_modules\electron-updater\package.json',
     'resources\app-update.yml',
-    'runtime\python\python.exe',
-    'runtime\node\node.exe',
-    'runtime\git\cmd\git.exe',
-    'runtime\pandoc\pandoc.exe',
-    'runtime\draw.io\draw.io.exe',
-    'runtime\texlive\miktex\bin\x64\xelatex.exe'
+    'runtime\python\python.exe'
 )
+if ($RuntimeProfile -eq 'full') {
+    $requiredLayout += @(
+        'runtime\node\node.exe',
+        'runtime\git\cmd\git.exe',
+        'runtime\pandoc\pandoc.exe',
+        'runtime\draw.io\draw.io.exe',
+        'runtime\texlive\miktex\bin\x64\xelatex.exe'
+    )
+}
 foreach ($relative in $requiredLayout) {
     if (-not (Test-Path -LiteralPath (Join-Path $unpacked $relative))) {
         $issues.Add("Packaged layout is missing: $relative")
@@ -52,6 +64,13 @@ foreach ($relative in $requiredLayout) {
 }
 if (Test-Path -LiteralPath (Join-Path $unpacked 'resources\app.asar')) {
     $issues.Add('app.asar exists, but ArHub requires unpacked backend source.')
+}
+if ($RuntimeProfile -eq 'lite') {
+    foreach ($component in @('node', 'git', 'pandoc', 'draw.io', 'texlive')) {
+        if (Test-Path -LiteralPath (Join-Path $unpacked "runtime\$component")) {
+            $issues.Add("Lite package unexpectedly contains runtime component: $component")
+        }
+    }
 }
 
 $signatureTargets = @()
@@ -100,6 +119,9 @@ foreach ($target in $signatureTargets) {
 if (Test-Path -LiteralPath $latest) {
     $yaml = Get-Content -LiteralPath $latest -Encoding UTF8 | Out-String
     if ($yaml -notmatch '(?m)^sha512:\s*\S+') { $issues.Add('latest.yml does not contain sha512.') }
+    if ($installers.Count -eq 1 -and $yaml -notmatch [regex]::Escape($installers[0].Name)) {
+        $issues.Add("latest.yml does not reference $($installers[0].Name).")
+    }
 }
 if (($RequireUnsigned -or -not $AllowUnsigned) -and @($installers | Where-Object Name -Like '*-unsigned.exe').Count -gt 0) {
     $issues.Add('A formal release cannot contain the local-test -unsigned suffix.')

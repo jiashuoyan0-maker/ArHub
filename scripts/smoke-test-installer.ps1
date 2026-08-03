@@ -7,7 +7,10 @@ param(
     [switch]$AllowUnsigned,
     [switch]$RequireUnsigned,
     [switch]$PreserveInstallOnFailure,
+    [switch]$StopRunningArHub,
     [int]$StartupTimeoutSeconds = 120,
+    [ValidateSet('auto', 'full', 'lite')]
+    [string]$RuntimeProfile = 'auto',
     [string]$ReportPath
 )
 
@@ -18,7 +21,7 @@ Set-StrictMode -Version Latest
 $projectRoot = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path
 if ($AllowUnsigned -and $RequireUnsigned) { throw 'AllowUnsigned and RequireUnsigned are mutually exclusive.' }
 $smokeRoot = [System.IO.Path]::GetFullPath((Join-Path $env:LOCALAPPDATA 'ArHub\smoke'))
-if (-not $InstallDir) { $InstallDir = Join-Path $smokeRoot 'app' }
+if (-not $InstallDir) { $InstallDir = Join-Path $smokeRoot 'custom install\ArHub' }
 $install = [System.IO.Path]::GetFullPath($InstallDir)
 $smokePrefix = $smokeRoot.TrimEnd('\') + '\'
 if (-not $install.StartsWith($smokePrefix, [System.StringComparison]::OrdinalIgnoreCase)) {
@@ -43,6 +46,9 @@ $startupStartedAt = $null
 $startupCompletedAt = $null
 $appProcess = $null
 $uninstalled = $false
+$registeredInstallPath = $false
+$dataPreserved = $false
+$stoppedExistingApp = $false
 
 function Assert-SafeSmokePath([string]$Path) {
     $full = [System.IO.Path]::GetFullPath($Path)
@@ -92,6 +98,25 @@ function Restore-Shortcut([string]$Path, [string]$BackupPath, [bool]$Existed) {
     }
 }
 
+function Get-ArHubUninstallEntries {
+    $root = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall'
+    if (-not (Test-Path -LiteralPath $root)) { return @() }
+    return @(
+        Get-ChildItem -LiteralPath $root -ErrorAction SilentlyContinue |
+            ForEach-Object { Get-ItemProperty -LiteralPath $_.PSPath -ErrorAction SilentlyContinue } |
+            Where-Object { $_.DisplayName -match '^ArHub(?:\s|$)' }
+    )
+}
+
+$runningArHub = @(
+    Get-CimInstance Win32_Process -Filter "Name = 'ArHub.exe'" -ErrorAction SilentlyContinue |
+        Where-Object { $_.ExecutablePath }
+)
+if ($runningArHub.Count -gt 0 -and -not $StopRunningArHub) {
+    throw 'ArHub is running. Close it first or pass -StopRunningArHub to restore it after the smoke test.'
+}
+$restartExecutable = @($runningArHub | Select-Object -ExpandProperty ExecutablePath -Unique | Select-Object -First 1)
+
 $desktopShortcut = Join-Path ([Environment]::GetFolderPath('Desktop')) 'ArHub.lnk'
 $startMenuShortcut = Join-Path $env:APPDATA 'Microsoft\Windows\Start Menu\Programs\ArHub.lnk'
 $shortcutBackupDir = Join-Path $smokeRoot 'shortcut-backup'
@@ -103,11 +128,42 @@ $startMenuBackup = Join-Path $shortcutBackupDir 'start-menu-ArHub.lnk'
 if ($desktopExisted) { Copy-Item -LiteralPath $desktopShortcut -Destination $desktopBackup -Force }
 if ($startMenuExisted) { Copy-Item -LiteralPath $startMenuShortcut -Destination $startMenuBackup -Force }
 
+$registryBackupDir = Join-Path $smokeRoot 'registry-backup'
+New-Item -ItemType Directory -Path $registryBackupDir -Force | Out-Null
+$registryBackups = @()
+$registryIndex = 0
+$registryEntriesBeforeTest = @(Get-ArHubUninstallEntries)
+foreach ($entry in $registryEntriesBeforeTest) {
+    $nativePath = $entry.PSPath -replace '^Microsoft\.PowerShell\.Core\\Registry::', ''
+    $backupPath = Join-Path $registryBackupDir "uninstall-$registryIndex.reg"
+    & reg.exe export $nativePath $backupPath /y | Out-Null
+    if ($LASTEXITCODE -ne 0) { throw "Failed to back up uninstall registry key: $nativePath" }
+    $registryBackups += $backupPath
+    $registryIndex += 1
+}
+
 $oldAppData = $env:APPDATA
 $oldArHubData = $env:ARHUB_DATA_DIR
 $oldSmoke = $env:ARHUB_SMOKE_TEST
 
 try {
+    if ($runningArHub.Count -gt 0) {
+        $stoppedExistingApp = $true
+        $stopProcess = Start-Process -FilePath 'taskkill.exe' `
+            -ArgumentList @('/IM', 'ArHub.exe', '/T', '/F') `
+            -PassThru -Wait -WindowStyle Hidden
+        $deadline = (Get-Date).AddSeconds(15)
+        while ((Get-Process -Name 'ArHub' -ErrorAction SilentlyContinue) -and (Get-Date) -lt $deadline) {
+            Start-Sleep -Milliseconds 250
+        }
+        if (Get-Process -Name 'ArHub' -ErrorAction SilentlyContinue) {
+            throw 'Unable to stop the existing ArHub instance before the smoke test.'
+        }
+    }
+    foreach ($entry in $registryEntriesBeforeTest) {
+        Remove-Item -LiteralPath $entry.PSPath -Recurse -Force -ErrorAction Stop
+    }
+
     if (Test-Path -LiteralPath $install) {
         $safeInstall = Assert-SafeSmokePath $install
         Remove-Item -LiteralPath $safeInstall -Recurse -Force
@@ -120,11 +176,9 @@ try {
     $installerSignature = Assert-ReleaseSignature $installer
     $env:ARHUB_SMOKE_TEST = '1'
     $installStartedAt = Get-Date
-    $installProcess = Start-Process -FilePath $installer -ArgumentList @(
-        '/S',
-        '--no-desktop-shortcut',
-        "/D=$install"
-    ) -PassThru -Wait
+    # NSIS requires /D to be the final token and forbids quoting it, even for paths with spaces.
+    $installArguments = '/S --no-desktop-shortcut /D=' + $install
+    $installProcess = Start-Process -FilePath $installer -ArgumentList $installArguments -PassThru -Wait
     $installCompletedAt = Get-Date
     if ($installProcess.ExitCode -ne 0) {
         throw "Installer exited with code $($installProcess.ExitCode)"
@@ -135,6 +189,18 @@ try {
     if (-not (Test-Path -LiteralPath $uninstaller -PathType Leaf)) {
         throw "Installed uninstaller is missing: $uninstaller"
     }
+
+    $matchingEntries = @(
+        Get-ArHubUninstallEntries |
+            Where-Object {
+                $_.UninstallString -and
+                ([string]$_.UninstallString).IndexOf($uninstaller, [System.StringComparison]::OrdinalIgnoreCase) -ge 0
+            }
+    )
+    if ($matchingEntries.Count -ne 1) {
+        throw "Expected one uninstall entry for the custom install directory, found $($matchingEntries.Count)."
+    }
+    $registeredInstallPath = $true
 
     $autoRunDeadline = (Get-Date).AddSeconds($StartupTimeoutSeconds)
     do {
@@ -152,10 +218,25 @@ try {
     $elevationSignature = Assert-ReleaseSignature $elevationHelper
     $uninstallerSignature = Assert-ReleaseSignature $uninstaller
 
-    & (Join-Path $PSScriptRoot 'assert-runtime.ps1') `
-        -RuntimeDir (Join-Path $install 'runtime') `
-        -EnforceLock `
-        -SkipPythonDependencyCheck
+    $effectiveRuntimeProfile = $RuntimeProfile
+    if ($effectiveRuntimeProfile -eq 'auto') {
+        $installedPackageJson = Join-Path $install 'resources\app\package.json'
+        if (Test-Path -LiteralPath $installedPackageJson -PathType Leaf) {
+            $installedMetadata = Get-Content -LiteralPath $installedPackageJson -Encoding UTF8 | ConvertFrom-Json
+            $effectiveRuntimeProfile = [string]$installedMetadata.arhubRuntimeProfile
+        }
+        if ($effectiveRuntimeProfile -notin @('full', 'lite')) {
+            $effectiveRuntimeProfile = if (Test-Path -LiteralPath (Join-Path $install 'runtime\node')) { 'full' } else { 'lite' }
+        }
+    }
+    if ($effectiveRuntimeProfile -eq 'lite') {
+        & (Join-Path $PSScriptRoot 'assert-lite-runtime.ps1') -RuntimeDir (Join-Path $install 'runtime')
+    } else {
+        & (Join-Path $PSScriptRoot 'assert-runtime.ps1') `
+            -RuntimeDir (Join-Path $install 'runtime') `
+            -EnforceLock `
+            -SkipPythonDependencyCheck
+    }
 
     $env:APPDATA = $dataRoot
     $env:ARHUB_DATA_DIR = Join-Path $dataRoot 'ArHub'
@@ -199,9 +280,13 @@ try {
     while ((Test-Path -LiteralPath $install) -and (Get-Date) -lt $deadline) {
         Start-Sleep -Milliseconds 500
     }
-    if (Test-Path -LiteralPath $appExe) {
-        throw 'Uninstall completed but ArHub.exe is still present.'
+    if (Test-Path -LiteralPath $install) {
+        throw "Uninstall completed but the custom install directory still exists: $install"
     }
+    if (-not (Test-Path -LiteralPath $mainLog -PathType Leaf)) {
+        throw 'Uninstall removed user data even though deleteAppDataOnUninstall is disabled.'
+    }
+    $dataPreserved = $true
     $uninstalled = $true
 
     $completedAt = Get-Date
@@ -212,7 +297,7 @@ try {
         '%ARHUB_SMOKE_ROOT%\app'
     }
     $report = [ordered]@{
-        schemaVersion = 1
+        schemaVersion = 2
         status = 'passed'
         startedAt = $startedAt.ToUniversalTime().ToString('o')
         completedAt = $completedAt.ToUniversalTime().ToString('o')
@@ -222,7 +307,13 @@ try {
             totalSeconds = [math]::Round(($completedAt - $startedAt).TotalSeconds, 3)
         }
         installer = [System.IO.Path]::GetFileName($installer)
+        runtimeProfile = $effectiveRuntimeProfile
         installDir = $publicInstallDir
+        installation = [ordered]@{
+            customDirectory = $true
+            registryPathMatched = $registeredInstallPath
+            userDataPreserved = $dataPreserved
+        }
         signatures = [ordered]@{
             installer = $installerSignature
             application = $appSignature
@@ -247,7 +338,19 @@ try {
     }
     Restore-Shortcut $desktopShortcut $desktopBackup $desktopExisted
     Restore-Shortcut $startMenuShortcut $startMenuBackup $startMenuExisted
+    foreach ($entry in @(Get-ArHubUninstallEntries)) {
+        if ($entry.UninstallString -and ([string]$entry.UninstallString).IndexOf($install, [System.StringComparison]::OrdinalIgnoreCase) -ge 0) {
+            Remove-Item -LiteralPath $entry.PSPath -Recurse -Force -ErrorAction SilentlyContinue
+        }
+    }
+    foreach ($backupPath in $registryBackups) {
+        & reg.exe import $backupPath | Out-Null
+        if ($LASTEXITCODE -ne 0) { Write-Warning "Failed to restore uninstall registry backup: $backupPath" }
+    }
     $env:APPDATA = $oldAppData
     $env:ARHUB_DATA_DIR = $oldArHubData
     $env:ARHUB_SMOKE_TEST = $oldSmoke
+    if ($stoppedExistingApp -and $restartExecutable.Count -eq 1 -and (Test-Path -LiteralPath $restartExecutable[0] -PathType Leaf)) {
+        Start-Process -FilePath $restartExecutable[0] | Out-Null
+    }
 }

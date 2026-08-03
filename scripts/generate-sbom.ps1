@@ -1,11 +1,14 @@
 [CmdletBinding()]
 param(
-    [string]$RuntimeDir = (Join-Path $env:LOCALAPPDATA 'Programs\ArHub\runtime'),
+    [string]$RuntimeDir,
     [string]$OutputDir
 )
 
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
+$projectRoot = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path
+. (Join-Path $PSScriptRoot 'runtime-paths.ps1')
+$RuntimeDir = Resolve-ArHubRuntimeDir -RuntimeDir $RuntimeDir -ProjectRoot $projectRoot
 if (-not $OutputDir) { $OutputDir = Join-Path $PSScriptRoot '..\release' }
 $utf8 = New-Object System.Text.UTF8Encoding($false)
 $output = [System.IO.Path]::GetFullPath($OutputDir)

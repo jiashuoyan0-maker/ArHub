@@ -309,6 +309,19 @@ function loadSettings() {
   return state.settingsPromise;
 }
 
+async function saveSettingsPatch(patch) {
+  const response = await state.nativeFetch("/api/settings", {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ settings: patch }),
+  });
+  if (!response.ok) {
+    throw new Error((await response.text()) || `HTTP ${response.status}`);
+  }
+  state.settings = { ...(state.settings || {}), ...patch };
+  scheduleEnhance();
+}
+
 function findEditorParts() {
   const input = document.querySelector(
     'textarea[placeholder*="Agent"], input[placeholder*="Agent"]',
@@ -1039,10 +1052,12 @@ function updateAgentMeta(parts) {
   if (profile?.accent) {
     parts.agentPanel.style.setProperty("--mw-profile-accent", profile.accent);
   }
+  const runtime = state.settings?.agent_runtime || "openai_compatible";
+  const agentName = isLiteAgentMode(parts) ? "editor_ai" : "executor";
   const model =
-    isLiteAgentMode(parts)
-      ? state.settings?.editor_ai_model_id
-      : state.settings?.executor_model_id;
+    runtime === "local_claude"
+      ? state.settings?.claude_model || "Claude Code"
+      : state.settings?.[`${agentName}_model_id`];
   const modelLabel = parts.header.querySelector(".mw-model-label");
   const nextModel = model || "模型未配置";
   if (modelLabel && modelLabel.textContent !== nextModel) {
@@ -1053,6 +1068,14 @@ function updateAgentMeta(parts) {
   if (composerModel && composerModel.textContent !== nextModel) {
     composerModel.textContent = nextModel;
   }
+  const runtimeSelect = parts.composer.querySelector(".mw-runtime-select");
+  if (runtimeSelect && runtimeSelect.value !== runtime) runtimeSelect.value = runtime;
+  const effortSelect = parts.composer.querySelector(".mw-effort-select");
+  const effort =
+    runtime === "local_claude"
+      ? state.settings?.claude_effort || "high"
+      : state.settings?.[`${agentName}_reasoning_effort`] || "default";
+  if (effortSelect && effortSelect.value !== effort) effortSelect.value = effort;
   const composerModelControl = parts.composer.querySelector(".mw-composer-model");
   if (composerModelControl) {
     composerModelControl.title = model ? `当前模型: ${model}` : "当前模型未配置";
@@ -1319,6 +1342,77 @@ function enhanceComposer(parts) {
     modelText.className = "mw-composer-model-text";
     composerModel.append(modelText);
     row.append(composerModel);
+  }
+
+  let runtimeSelect = composerModel.querySelector(".mw-runtime-select");
+  if (!runtimeSelect) {
+    runtimeSelect = document.createElement("select");
+    runtimeSelect.className = "mw-runtime-select";
+    runtimeSelect.setAttribute("aria-label", "Agent 运行时");
+    [
+      ["openai_compatible", "开放模型"],
+      ["local_claude", "本机 Claude"],
+    ].forEach(([value, label]) => {
+      const option = document.createElement("option");
+      option.value = value;
+      option.textContent = label;
+      runtimeSelect.append(option);
+    });
+    runtimeSelect.addEventListener("change", async () => {
+      const previous = state.settings?.agent_runtime || "openai_compatible";
+      try {
+        if (runtimeSelect.value === "local_claude") {
+          const detected = await state.nativeFetch("/api/settings/detect-claude", {
+            cache: "no-store",
+          });
+          const payload = detected.ok ? await detected.json() : null;
+          if (!payload?.compatible) throw new Error("未检测到可用的本机 Claude Code");
+        }
+        await saveSettingsPatch({ agent_runtime: runtimeSelect.value });
+      } catch (error) {
+        runtimeSelect.value = previous;
+        runtimeSelect.title = String(error?.message || error);
+      }
+    });
+    composerModel.append(runtimeSelect);
+  }
+
+  let effortSelect = composerModel.querySelector(".mw-effort-select");
+  if (!effortSelect) {
+    effortSelect = document.createElement("select");
+    effortSelect.className = "mw-effort-select";
+    effortSelect.setAttribute("aria-label", "思考强度");
+    [
+      ["default", "默认"],
+      ["off", "关闭"],
+      ["low", "低"],
+      ["medium", "中"],
+      ["high", "高"],
+      ["xhigh", "极高"],
+      ["max", "最大"],
+    ].forEach(([value, label]) => {
+      const option = document.createElement("option");
+      option.value = value;
+      option.textContent = label;
+      effortSelect.append(option);
+    });
+    effortSelect.addEventListener("change", async () => {
+      const runtime = state.settings?.agent_runtime || "openai_compatible";
+      const agentName = isLiteAgentMode(parts) ? "editor_ai" : "executor";
+      const key =
+        runtime === "local_claude"
+          ? "claude_effort"
+          : `${agentName}_reasoning_effort`;
+      const fallback = runtime === "local_claude" ? "high" : "default";
+      const previous = state.settings?.[key] || fallback;
+      try {
+        await saveSettingsPatch({ [key]: effortSelect.value });
+      } catch (error) {
+        effortSelect.value = previous;
+        effortSelect.title = String(error?.message || error);
+      }
+    });
+    composerModel.append(effortSelect);
   }
 
   const send = row.querySelector("[data-send-btn]");

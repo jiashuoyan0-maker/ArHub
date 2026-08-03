@@ -1,6 +1,6 @@
 [CmdletBinding()]
 param(
-    [string]$RuntimeDir = (Join-Path $env:LOCALAPPDATA 'Programs\ArHub\runtime'),
+    [string]$RuntimeDir,
     [string]$ManifestPath,
     [string]$LockPath,
     [string]$PythonLockPath
@@ -8,6 +8,9 @@ param(
 
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
+$projectRoot = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path
+. (Join-Path $PSScriptRoot 'runtime-paths.ps1')
+$RuntimeDir = Resolve-ArHubRuntimeDir -RuntimeDir $RuntimeDir -ProjectRoot $projectRoot
 
 if (-not $ManifestPath) { $ManifestPath = Join-Path $PSScriptRoot '..\packaging\runtime-manifest.json' }
 if (-not $LockPath) { $LockPath = Join-Path $PSScriptRoot '..\packaging\runtime-lock.json' }

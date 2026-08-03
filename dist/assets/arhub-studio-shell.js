@@ -34,6 +34,7 @@ const KICKERS = Object.freeze({
 });
 
 let scheduled = false;
+let runtimeSettingsPromise = null;
 
 function currentView() {
   const path = window.location.pathname;
@@ -239,7 +240,190 @@ function decoratePipeline(main) {
   });
 }
 
+function settingsSelect(options) {
+  const select = document.createElement("select");
+  options.forEach(([value, label]) => {
+    const option = document.createElement("option");
+    option.value = value;
+    option.textContent = label;
+    select.append(option);
+  });
+  return select;
+}
+
+function runtimeField(labelText, control, setting) {
+  const field = document.createElement("label");
+  field.className = "arhub-studio-field arhub-runtime-field";
+  const label = document.createElement("span");
+  label.className = "arhub-studio-field-label";
+  label.textContent = labelText;
+  control.dataset.runtimeSetting = setting;
+  field.append(label, control);
+  return field;
+}
+
+function syncRuntimeCard(card, settings) {
+  card.querySelectorAll("[data-runtime-setting]").forEach((control) => {
+    const key = control.dataset.runtimeSetting;
+    if (key && settings[key] != null) control.value = settings[key];
+  });
+  const local = settings.agent_runtime === "local_claude";
+  card.querySelectorAll("[data-runtime-scope='local']").forEach((field) => {
+    field.hidden = !local;
+  });
+  card.querySelectorAll("[data-runtime-scope='open']").forEach((field) => {
+    field.hidden = local;
+  });
+}
+
+function installRuntimeSettings(main) {
+  const host = main.querySelector(".space-y-6");
+  if (!(host instanceof HTMLElement)) return;
+  let card = host.querySelector("#arhub-runtime-settings");
+  if (!card) {
+    card = document.createElement("section");
+    card.id = "arhub-runtime-settings";
+    card.className = "card arhub-studio-settings-card arhub-runtime-settings";
+
+    const heading = document.createElement("div");
+    heading.className = "arhub-studio-settings-heading";
+    addLeadingIcon(heading, "Cpu", "arhub-studio-settings-heading-icon", 19);
+    const title = document.createElement("p");
+    title.textContent = "Agent 运行时";
+    heading.append(title);
+
+    const grid = document.createElement("div");
+    grid.className = "arhub-runtime-grid";
+    const runtime = settingsSelect([
+      ["openai_compatible", "开放模型"],
+      ["local_claude", "本机 Claude Code"],
+    ]);
+    const provider = settingsSelect([
+      ["auto", "自动识别"],
+      ["deepseek", "DeepSeek"],
+      ["glm", "GLM"],
+      ["openai", "OpenAI"],
+      ["generic", "通用兼容"],
+    ]);
+    const reasoning = settingsSelect([
+      ["default", "模型默认"],
+      ["off", "关闭"],
+      ["low", "低"],
+      ["medium", "中"],
+      ["high", "高"],
+      ["xhigh", "极高"],
+      ["max", "最大"],
+    ]);
+    const claudeEffort = reasoning.cloneNode(true);
+    const claudeBin = document.createElement("input");
+    claudeBin.type = "text";
+    claudeBin.placeholder = "claude";
+    const claudeModel = document.createElement("input");
+    claudeModel.type = "text";
+    claudeModel.placeholder = "Claude Code 默认模型";
+
+    const runtimeControl = runtimeField("运行方式", runtime, "agent_runtime");
+    const providerControl = runtimeField("Provider", provider, "executor_provider");
+    const reasoningControl = runtimeField(
+      "思考强度",
+      reasoning,
+      "executor_reasoning_effort",
+    );
+    providerControl.dataset.runtimeScope = "open";
+    reasoningControl.dataset.runtimeScope = "open";
+    const binControl = runtimeField("Claude Code", claudeBin, "claude_bin");
+    const modelControl = runtimeField("Claude 模型", claudeModel, "claude_model");
+    const effortControl = runtimeField("Claude 强度", claudeEffort, "claude_effort");
+    binControl.dataset.runtimeScope = "local";
+    modelControl.dataset.runtimeScope = "local";
+    effortControl.dataset.runtimeScope = "local";
+    grid.append(
+      runtimeControl,
+      providerControl,
+      reasoningControl,
+      binControl,
+      modelControl,
+      effortControl,
+    );
+
+    const actions = document.createElement("div");
+    actions.className = "arhub-runtime-actions";
+    const status = document.createElement("span");
+    status.className = "arhub-runtime-status";
+    status.setAttribute("aria-live", "polite");
+    const detect = document.createElement("button");
+    detect.type = "button";
+    detect.className = "btn-ghost arhub-studio-action";
+    detect.textContent = "检测本机 Claude";
+    detect.setAttribute("aria-label", "检测本机 Claude Code");
+    addLeadingIcon(detect, "ScanSearch", "arhub-studio-action-icon", 15);
+    const save = document.createElement("button");
+    save.type = "button";
+    save.className = "btn-primary";
+    save.textContent = "保存运行时";
+    addLeadingIcon(save, "Save", "arhub-studio-action-icon", 15);
+    actions.append(status, detect, save);
+    card.append(heading, grid, actions);
+    host.prepend(card);
+
+    runtime.addEventListener("change", () => {
+      syncRuntimeCard(card, {
+        agent_runtime: runtime.value,
+      });
+    });
+    const detectLocal = async () => {
+      status.textContent = "检测中...";
+      const response = await fetch("/api/settings/detect-claude", {
+        cache: "no-store",
+      });
+      const payload = response.ok ? await response.json() : null;
+      status.textContent = payload?.compatible
+        ? payload.candidates?.[0]?.version || "本机 Claude Code 可用"
+        : "未检测到本机 Claude Code";
+      status.dataset.state = payload?.compatible ? "ready" : "error";
+      if (payload?.recommended && !claudeBin.value.trim()) {
+        claudeBin.value = payload.recommended;
+      }
+      return Boolean(payload?.compatible);
+    };
+    detect.addEventListener("click", () => void detectLocal());
+    save.addEventListener("click", async () => {
+      const values = {};
+      card.querySelectorAll("[data-runtime-setting]").forEach((control) => {
+        values[control.dataset.runtimeSetting] = control.value.trim();
+      });
+      if (values.agent_runtime === "local_claude" && !(await detectLocal())) return;
+      save.disabled = true;
+      try {
+        const response = await fetch("/api/settings", {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ settings: values }),
+        });
+        if (!response.ok) throw new Error(await response.text());
+        status.textContent = "已保存";
+        status.dataset.state = "ready";
+        runtimeSettingsPromise = Promise.resolve(values);
+      } catch (error) {
+        status.textContent = String(error?.message || error);
+        status.dataset.state = "error";
+      } finally {
+        save.disabled = false;
+      }
+    });
+  }
+
+  if (!runtimeSettingsPromise) {
+    runtimeSettingsPromise = fetch("/api/settings", { cache: "no-store" })
+      .then((response) => (response.ok ? response.json() : null))
+      .then((payload) => payload?.settings || {})
+      .catch(() => ({}));
+  }
+  runtimeSettingsPromise.then((settings) => syncRuntimeCard(card, settings));
+}
+
 function decorateSettings(main) {
+  installRuntimeSettings(main);
   main.querySelectorAll(".space-y-6 > .card").forEach((card, index) => {
     if (!(card instanceof HTMLElement)) return;
     card.classList.add("arhub-studio-settings-card");

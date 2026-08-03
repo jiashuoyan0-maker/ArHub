@@ -14,6 +14,7 @@ const { spawn } = require('child_process');
 const path = require('path');
 const http = require('http');
 const fs = require('fs');
+const PACKAGE_METADATA = require('./package.json');
 
 // 自动更新器
 const { Updater } = require('./updater');
@@ -25,6 +26,9 @@ const APP_ROOT = IS_DEV ? __dirname : path.join(process.resourcesPath, 'app');
 const RUNTIME_DIR = IS_DEV
   ? path.join(__dirname, 'runtime')
   : path.join(path.dirname(process.resourcesPath), 'runtime');
+const RUNTIME_PROFILE = String(
+  process.env.ARHUB_RUNTIME_PROFILE || PACKAGE_METADATA.arhubRuntimeProfile || 'full',
+).toLowerCase();
 
 const PYTHON_EXE = path.join(RUNTIME_DIR, 'python', 'python.exe');
 const BACKEND_DIR = IS_DEV
@@ -32,8 +36,9 @@ const BACKEND_DIR = IS_DEV
   : path.join(APP_ROOT, 'backend');
 
 const PORT = 18088;
-const APPDATA_DIR = process.env.APPDATA || path.join(process.env.USERPROFILE || process.cwd(), 'AppData', 'Roaming');
-const LOG_DIR = path.join(APPDATA_DIR, 'ArHub', 'logs');
+const ROAMING_DATA_DIR = process.env.APPDATA || path.join(process.env.USERPROFILE || process.cwd(), 'AppData', 'Roaming');
+const USER_DATA_DIR = path.resolve(process.env.ARHUB_DATA_DIR || path.join(ROAMING_DATA_DIR, 'ArHub'));
+const LOG_DIR = path.join(USER_DATA_DIR, 'logs');
 const MAIN_LOG = path.join(LOG_DIR, 'desktop-main.log');
 
 function appendMainLog(level, args) {
@@ -68,12 +73,16 @@ function verifyRuntime() {
     { file: PYTHON_EXE,                                          name: 'python.exe',     minSize: 50 * 1024,  maxSize: 500 * 1024 },
     { file: path.join(RUNTIME_DIR, 'python', 'python311.dll'),   name: 'python311.dll',  minSize: 1024 * 1024 },
     { file: path.join(RUNTIME_DIR, 'python', 'python311.zip'),   name: 'python311.zip',  minSize: 1024 * 1024 },
-    { file: path.join(RUNTIME_DIR, 'node',   'node.exe'),        name: 'node.exe',       minSize: 10 * 1024 * 1024 },
-    { file: path.join(RUNTIME_DIR, 'git', 'cmd', 'git.exe'),     name: 'git.exe',        minSize: 10 * 1024 },
-    { file: path.join(RUNTIME_DIR, 'pandoc', 'pandoc.exe'),      name: 'pandoc.exe',     minSize: 10 * 1024 * 1024 },
-    { file: path.join(RUNTIME_DIR, 'draw.io', 'draw.io.exe'),    name: 'draw.io.exe',    minSize: 50 * 1024 * 1024 },
-    { file: path.join(RUNTIME_DIR, 'texlive', 'miktex', 'bin', 'x64', 'xelatex.exe'), name: 'xelatex.exe', minSize: 100 * 1024 },
   ];
+  if (RUNTIME_PROFILE === 'full') {
+    checks.push(
+      { file: path.join(RUNTIME_DIR, 'node',   'node.exe'),        name: 'node.exe',       minSize: 10 * 1024 * 1024 },
+      { file: path.join(RUNTIME_DIR, 'git', 'cmd', 'git.exe'),     name: 'git.exe',        minSize: 10 * 1024 },
+      { file: path.join(RUNTIME_DIR, 'pandoc', 'pandoc.exe'),      name: 'pandoc.exe',     minSize: 10 * 1024 * 1024 },
+      { file: path.join(RUNTIME_DIR, 'draw.io', 'draw.io.exe'),    name: 'draw.io.exe',    minSize: 50 * 1024 * 1024 },
+      { file: path.join(RUNTIME_DIR, 'texlive', 'miktex', 'bin', 'x64', 'xelatex.exe'), name: 'xelatex.exe', minSize: 100 * 1024 },
+    );
+  }
   const issues = [];
   for (const c of checks) {
     if (!fs.existsSync(c.file)) {
@@ -312,6 +321,10 @@ function startBackend() {
 
   const env = Object.assign({}, process.env, {
     ARHUB_DESKTOP: '1',
+    ARHUB_RUNTIME_DIR: RUNTIME_DIR,
+    ARHUB_RUNTIME_PROFILE: RUNTIME_PROFILE,
+    ARHUB_DATA_DIR: USER_DATA_DIR,
+    ARHUB_FRONTEND_DIST: path.join(APP_ROOT, 'dist'),
     API_PORT: String(actualPort),
     ARHUB_API_PORT: String(actualPort),
     PYTHONDONTWRITEBYTECODE: '1',
@@ -676,7 +689,7 @@ async function initUpdater() {
     check_interval_hours: updateCfg.check_interval_hours,
     allow_prerelease: updateCfg.allow_prerelease,
     require_publisher_verification: updateCfg.require_publisher_verification === true,
-    user_data_dir: app.getPath('userData'),
+    user_data_dir: USER_DATA_DIR,
     update_config_path: path.join(process.resourcesPath, 'app-update.yml'),
     logger: console,
   });

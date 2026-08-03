@@ -1036,6 +1036,99 @@ html.arhub-studio-shell-active:not(.arhub-editor-studio-active) .arhub-studio-fi
   font-size: 11px !important;
 }
 
+html.arhub-studio-shell-active:not(.arhub-editor-studio-active) .arhub-runtime-settings {
+  display: grid;
+  gap: 20px;
+}
+
+html.arhub-studio-shell-active:not(.arhub-editor-studio-active) .arhub-runtime-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+}
+
+html.arhub-studio-shell-active:not(.arhub-editor-studio-active) .arhub-runtime-field {
+  display: grid;
+  gap: 7px;
+}
+
+html.arhub-studio-shell-active:not(.arhub-editor-studio-active) .arhub-runtime-field[hidden] {
+  display: none !important;
+}
+
+html.arhub-studio-shell-active:not(.arhub-editor-studio-active) .arhub-runtime-field input,
+html.arhub-studio-shell-active:not(.arhub-editor-studio-active) .arhub-runtime-field select {
+  width: 100%;
+  padding-inline: 11px;
+}
+
+html.arhub-studio-shell-active:not(.arhub-editor-studio-active) .arhub-runtime-actions {
+  display: flex;
+  min-height: 40px;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 9px;
+}
+
+html.arhub-studio-shell-active:not(.arhub-editor-studio-active) .arhub-runtime-actions button {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  min-width: max-content;
+  min-height: 36px;
+  padding: 0 12px !important;
+  gap: 7px;
+  border: 1px solid var(--as-border) !important;
+  border-radius: 10px !important;
+  color: var(--as-text) !important;
+  background: rgba(255, 255, 255, 0.065) !important;
+  box-shadow: inset 0 1px rgba(255, 255, 255, 0.08) !important;
+  font-size: 12px !important;
+  font-weight: 620 !important;
+  line-height: 1 !important;
+  white-space: nowrap;
+}
+
+html.arhub-studio-shell-active:not(.arhub-editor-studio-active) .arhub-runtime-actions .btn-primary {
+  color: #17111f !important;
+  border-color: rgba(255, 255, 255, 0.88) !important;
+  background: linear-gradient(180deg, #ffffff, #edeaf7) !important;
+}
+
+html.arhub-studio-shell-active:not(.arhub-editor-studio-active) .arhub-runtime-status {
+  min-width: 0;
+  margin-right: auto;
+  overflow: hidden;
+  color: var(--as-muted);
+  font-size: 11px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+html.arhub-studio-shell-active:not(.arhub-editor-studio-active) .arhub-runtime-status[data-state="ready"] {
+  color: var(--as-green);
+}
+
+html.arhub-studio-shell-active:not(.arhub-editor-studio-active) .arhub-runtime-status[data-state="error"] {
+  color: var(--as-red);
+}
+
+@media (max-width: 760px) {
+  html.arhub-studio-shell-active:not(.arhub-editor-studio-active) .arhub-runtime-grid {
+    grid-template-columns: 1fr;
+  }
+
+  html.arhub-studio-shell-active:not(.arhub-editor-studio-active) .arhub-runtime-actions {
+    align-items: stretch;
+    flex-wrap: wrap;
+  }
+
+  html.arhub-studio-shell-active:not(.arhub-editor-studio-active) .arhub-runtime-status {
+    flex-basis: 100%;
+  }
+}
+
 /* Modal and extension surfaces should not snap back to the old flat theme. */
 
 html.arhub-studio-shell-active:not(.arhub-editor-studio-active) .mw-extension-overlay,

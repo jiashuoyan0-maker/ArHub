@@ -41,9 +41,13 @@ ArHub 不把 Agent 限制在孤立的聊天框里。日常操作以对话为中�
 
 [前往 GitHub Releases 下载最新 Windows 安装包](https://github.com/jiashuoyan0-maker/ArHub/releases/latest)。
 
-`v1.0.9` 安装包约 1.56 GiB，安装后的锁定运行时约 6.52 GiB。建议安装前至少预留
-10 GiB 空间。安装器需要展开约 8.7 万个文件，在机械硬盘或启用实时杀毒扫描的
-设备上可能连续数分钟没有明显进度，请等待安装完成。
+`v1.0.10` 提供约 326 MiB 的 Lite 安装包，保留桌面端、开放模型 Agent、基础文档
+处理和本机 Claude Code 接入。需要完整 TeX、Draw.io、Pandoc、Git 与科学计算工具链
+的用户可以继续使用 Full 构建流程。
+
+`v1.0.10` 已切换为引导式安装：可以保留默认目录，也可以选择其他磁盘或目录。程序和
+内置运行时随所选安装目录移动；模型设置、凭证、日志和工作区仍保存在 `%APPDATA%\ArHub`，升级
+或卸载程序不会删除这些用户数据。完整路径规则见 [docs/PATHS.md](docs/PATHS.md)。
 
 > [!IMPORTANT]
 > ArHub 是个人维护的开源项目，Windows 安装器目前没有 Authenticode 代码签名。
@@ -53,7 +57,7 @@ ArHub 不把 Agent 限制在孤立的聊天框里。日常操作以对话为中�
 > 也不要从网盘或第三方镜像下载安装包。
 
 ```powershell
-Get-FileHash .\ArHub-Setup-1.0.9-x64.exe -Algorithm SHA256
+Get-FileHash .\ArHub-Setup-1.0.10-lite-x64.exe -Algorithm SHA256
 ```
 
 将输出与同一 Release 中的 `SHA256SUMS.txt` 对应条目逐字核对。正式发布还包含
@@ -65,6 +69,8 @@ SHA-512 自动更新校验、CycloneDX SBOM、安装烟测报告和 GitHub 构�
 
 Agent 对话是主工作区。打开文档后，Markdown/LaTeX 编辑器会在侧边展开，当前
 文件会自动进入 Agent 上下文，不需要在聊天窗口、文件管理器和编辑器之间来回切换。
+输入栏可以直接切换开放模型或本机 Claude Code、调整思考强度、添加附件，并在
+Agent 运行时将发送操作切换为终止操作。
 
 ![ArHub Agent and Markdown editor](assets/screenshots/03-editor-agent-split.png)
 
@@ -83,14 +89,23 @@ Agent 对话是主工作区。打开文档后，Markdown/LaTeX 编辑器会在�
 #### 每个 Agent 独立选择模型
 
 执行者、审稿者和编辑器助手可以分别配置 Base URL、API Key 与 Model ID，适合用
-不同模型承担执行、批判和写作任务。下图使用空白演示配置，不包含任何凭证。
+不同模型承担执行、批判和写作任务。运行时、Provider 与思考强度也可以独立选择。
+下图仅填写公开的官方 API 地址和演示模型名，所有 API Key 均为空。
 
 ![ArHub multi-agent model settings](assets/screenshots/05-model-settings-light.png)
+
+#### 面向更多工具的开放扩展层
+
+扩展中心通过 Manifest 注册 Agent Profile、提示命令与工具入口。内置的 Diagram Studio
+和 Web Studio 可以把流程图、网页项目和研究写作放进同一个工作区；第三方 Manifest
+默认只作为声明式数据加载，不会直接执行扩展代码。
+
+![ArHub extension center](assets/screenshots/06-extension-center.png)
 
 ### 典型工作方式
 
 1. 新建任务并选择工作流模板，或者从一个轻量 Agent 对话开始。
-2. 为执行者、审稿者和编辑器助手选择各自的 OpenAI-compatible 模型。
+2. 为执行者、审稿者和编辑器助手选择 Provider、模型与思考强度，或切换到本机 Claude Code。
 3. Agent 调用 Skill 执行检索、分析、代码、绘图或文档生成，并把结果写入任务工作区。
 4. 在对话旁打开产物，检查文件差异，再决定应用、丢弃或撤销修改。
 5. 在检查点暂停、恢复或重跑单个步骤，不必从头复制整段提示词。
@@ -134,7 +149,7 @@ API Key 只应保存在本机设置中。不要把 Key 写入仓库、截图、I
 | DOCX 与提取 | 可运行源码 | Node 高保真引擎、python-docx fallback、PDF/DOCX 文本提取 |
 | 前端 | 恢复产物 | Codex 式动态工作台、亮暗主题；尚无可复现的模块化前端构建 |
 | Skills 与扩展 | 明文可审查 | Skill、模板和声明式 profile 不需要激活或解密 |
-| Windows 安装包 | `v1.0.9` 已发布 | 完整 runtime 锁、NSIS、SBOM、校验和、安装烟测与 GitHub 发布工作流；官方产物当前未签名 |
+| Windows 安装包 | `v1.0.10` 已发布 | Lite runtime、NSIS、SBOM、校验和、自定义安装目录与 GitHub 发布工作流；官方产物当前未签名 |
 
 ### 从源码运行
 
@@ -168,7 +183,7 @@ npm run audit:open-source
 git diff --check
 ```
 
-当前回归集包含 30 个 Python 测试和 17 个 Node 测试，覆盖模型 URL、LLM 请求、
+当前回归集包含 38 个 Python 测试和 26 个 Node 测试，覆盖模型 URL、LLM 请求、
 Agent 工具循环、工作流状态、编辑器安全边界、diff/apply/undo、DOCX 导出和提取
 队列。Windows 发布工作流还会完成安装、后端启动、前端加载、卸载和未签名状态检查。
 
@@ -180,7 +195,7 @@ $env:ARHUB_RUNTIME_DIR = 'C:\path\to\verified\runtime'
 npm run runtime:check
 npm run package:win:unsigned
 powershell -NoProfile -ExecutionPolicy Bypass -File scripts\smoke-test-installer.ps1 `
-  -InstallerPath release\ArHub-Setup-1.0.9-x64-unsigned.exe -AllowUnsigned
+  -InstallerPath release\ArHub-Setup-1.0.10-lite-x64.exe -RequireUnsigned
 ```
 
 ### 数据与扩展
@@ -219,6 +234,13 @@ powershell -NoProfile -ExecutionPolicy Bypass -File scripts\smoke-test-installer
 
 ---
 
+### Lite / Full 安装包
+
+- `Lite`：保留桌面端、FastAPI、开放模型 Agent、基础文档/表格处理；可选择本机 Claude Code。移除内置 Node/Claude、Git、TeX、Draw.io、Pandoc 和大型机器学习库。
+- `Full`：保留完整锁定运行时，适合需要 LaTeX、Draw.io、Pandoc 和本地科学计算工具链的用户。
+- 两个版本共用 `%APPDATA%\ArHub` 中的设置与工作区，可以在不迁移数据的情况下切换。
+- 本机 Claude Code 模式会使用用户终端中已经安装并登录的 Claude Code；开放模型模式继续支持 DeepSeek、GLM、OpenAI-compatible API。
+
 ## English
 
 ArHub (AI Research Hub) is a desktop agent workspace for research writing, data
@@ -243,11 +265,16 @@ the task so work can be resumed, reviewed, and audited later.
 
 [Download the latest Windows installer from GitHub Releases](https://github.com/jiashuoyan0-maker/ArHub/releases/latest).
 
-The `v1.0.9` installer is approximately 1.56 GiB, and its locked runtime expands
-to about 6.52 GiB. Keep at least 10 GiB of free disk space before installation.
-The installer extracts roughly 87,000 files, so it may appear inactive for
-several minutes on a mechanical drive or while real-time antivirus scanning is
-enabled. Let the installation finish before launching ArHub.
+`v1.0.10` provides a Lite installer of approximately 326 MiB. It keeps the
+desktop app, open-model agent, basic document processing, and local Claude Code
+integration. Users who need the complete TeX, Draw.io, Pandoc, Git, and local
+scientific-computing toolchain can continue to use the Full build profile.
+
+`v1.0.10` uses an assisted installer: users can keep the default destination or
+choose another drive and directory. Application files and the bundled runtime
+follow the selected destination, while model settings, credentials, logs, and workspaces remain in
+`%APPDATA%\ArHub` and survive upgrades or uninstall. See
+[docs/PATHS.md](docs/PATHS.md) for the complete policy.
 
 > [!IMPORTANT]
 > ArHub is an independently maintained open-source project. The Windows
@@ -259,7 +286,7 @@ enabled. Let the installation finish before launching ArHub.
 > or any other system-wide protection, and do not use third-party mirrors.
 
 ```powershell
-Get-FileHash .\ArHub-Setup-1.0.9-x64.exe -Algorithm SHA256
+Get-FileHash .\ArHub-Setup-1.0.10-lite-x64.exe -Algorithm SHA256
 ```
 
 Compare the result character by character with the matching entry in
@@ -274,7 +301,9 @@ build provenance attestations.
 The agent conversation is the main workspace. When a document is opened, the
 Markdown/LaTeX editor expands alongside it and automatically places the current
 file in the agent context. There is no need to keep switching among a chat,
-file manager, and editor.
+file manager, and editor. The composer can switch between open models and local
+Claude Code, set reasoning effort, attach files, and turn Send into Stop while
+the agent is running.
 
 ![ArHub Agent and Markdown editor](assets/screenshots/03-editor-agent-split.png)
 
@@ -296,15 +325,25 @@ persisted per task and can be resumed after an interruption.
 
 The executor, reviewer, and editor assistant can each use a separate Base URL,
 API Key, and Model ID. This makes it possible to assign execution, critique,
-and writing to different models. The screenshot uses an empty demonstration
-configuration and contains no credentials.
+and writing to different models. Runtime, provider, and reasoning effort are
+configurable as well. The screenshot contains public API endpoints and example
+model names only; every API key field is empty.
 
 ![ArHub multi-agent model settings](assets/screenshots/05-model-settings-light.png)
+
+#### An open extension layer for more tools
+
+The extension center registers agent profiles, prompt commands, and tool entry
+points through manifests. Built-in Diagram Studio and Web Studio bring diagrams,
+web projects, and research writing into one workspace. Third-party manifests are
+loaded as declarative data and do not execute extension code by default.
+
+![ArHub extension center](assets/screenshots/06-extension-center.png)
 
 ### Typical workflow
 
 1. Create a task and select a workflow template, or begin with a lightweight agent chat.
-2. Choose an OpenAI-compatible model for the executor, reviewer, and editor assistant.
+2. Choose a provider, model, and reasoning effort for each agent, or switch to local Claude Code.
 3. Let the agent call Skills for search, analysis, coding, plotting, or document generation.
 4. Open artifacts beside the conversation, inspect file diffs, then apply, discard, or undo changes.
 5. Pause, resume, or rerun an individual step from a checkpoint without rebuilding the prompt.
@@ -331,11 +370,24 @@ layer. The Model ID must be one actually enabled for the account, such as
 `deepseek-chat`, a GLM model ID supplied by the provider, or `gpt-4o`. The
 connection layer respects `HTTP_PROXY`, `HTTPS_PROXY`, and `NO_PROXY`.
 
-The built-in agents call the model endpoints configured in Settings directly;
-they do not depend on Claude CLI. `ClaudeRunner` remains only as a compatibility
-class name and does not replace the agent. Providers differ in tool calling,
+The default open-model runtime calls the endpoints configured in Settings
+directly. Users can also select a compatible local Claude Code installation;
+ArHub detects the executable, streams its structured output, supports stop, and
+passes the configured Claude effort level (`low` through `max`). Provider-aware
+reasoning controls map to GLM thinking mode and OpenAI reasoning effort without
+sending unsupported options to DeepSeek. Providers still differ in tool calling,
 vision input, context length, and token parameter support, so a successful
 connection test does not guarantee identical workflow capabilities.
+
+### Lite and Full installers
+
+- **Lite** keeps Electron, the FastAPI core, the open-model agent, and basic
+  document/spreadsheet libraries. It expects a local Claude Code installation
+  when that runtime is selected and omits bundled Node/Claude, Git, TeX,
+  Draw.io, Pandoc, and large optional ML packages.
+- **Full** keeps the complete locked runtime for LaTeX, Draw.io, Pandoc, and
+  local scientific-computing workflows.
+- Both profiles use `%APPDATA%\ArHub`, so settings and workspaces remain shared.
 
 API keys should be stored only in local settings. Never place keys in the
 repository, screenshots, Issues, or logs. Revoke and regenerate any credential
@@ -352,7 +404,7 @@ that has previously been exposed in a chat or another external location.
 | DOCX and extraction | Runnable source | High-fidelity Node engine, python-docx fallback, and PDF/DOCX text extraction |
 | Frontend | Recovered artifacts | Codex-style dynamic workspace and light/dark themes; no reproducible modular frontend build yet |
 | Skills and extensions | Plain reviewable files | Skills, templates, and declarative profiles require no activation or decryption |
-| Windows installer | `v1.0.9` released | Locked runtime, NSIS, SBOMs, checksums, installer smoke tests, and GitHub release workflow; official artifacts are currently unsigned |
+| Windows installer | `v1.0.10` released | Lite runtime, NSIS, SBOMs, checksums, custom install paths, and GitHub release workflow; official artifacts are currently unsigned |
 
 ### Run from source
 
@@ -386,7 +438,7 @@ npm run audit:open-source
 git diff --check
 ```
 
-The current regression suite contains 30 Python tests and 17 Node tests. It
+The current regression suite contains 40 Python tests and 26 Node tests. It
 covers model URLs, LLM requests, agent tool loops, workflow state, editor safety
 boundaries, diff/apply/undo, DOCX export, and the extraction queue. The Windows
 release workflow additionally verifies installation, backend startup, frontend
@@ -398,9 +450,10 @@ To build an unsigned Windows installer locally:
 npm ci
 $env:ARHUB_RUNTIME_DIR = 'C:\path\to\verified\runtime'
 npm run runtime:check
-npm run package:win:unsigned
+npm run package:win:lite
+# or: npm run package:win:full
 powershell -NoProfile -ExecutionPolicy Bypass -File scripts\smoke-test-installer.ps1 `
-  -InstallerPath release\ArHub-Setup-1.0.9-x64-unsigned.exe -AllowUnsigned
+  -InstallerPath release\ArHub-Setup-1.0.10-lite-x64.exe -RequireUnsigned
 ```
 
 ### Data and extensions

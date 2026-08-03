@@ -1,10 +1,13 @@
 [CmdletBinding()]
 param(
-    [string]$RuntimeDir = (Join-Path $env:LOCALAPPDATA 'Programs\ArHub\runtime'),
+    [string]$RuntimeDir,
+    [ValidateSet('full', 'lite')]
+    [string]$RuntimeProfile = $(if ($env:ARHUB_RUNTIME_PROFILE) { $env:ARHUB_RUNTIME_PROFILE } else { 'full' }),
     [ValidateSet('pfx', 'azure')]
     [string]$SigningProvider = $(if ($env:ARHUB_SIGNING_PROVIDER) { $env:ARHUB_SIGNING_PROVIDER } else { 'pfx' }),
     [switch]$AllowUnsigned,
     [switch]$UnsignedRelease,
+    [switch]$AllowRuntimeDrift,
     [switch]$SkipTests,
     [switch]$Publish
 )
@@ -12,15 +15,24 @@ param(
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
 $projectRoot = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path
-$runtime = (Resolve-Path -LiteralPath $RuntimeDir).Path
+. (Join-Path $PSScriptRoot 'runtime-paths.ps1')
+$runtime = Resolve-ArHubRuntimeDir -RuntimeDir $RuntimeDir -ProjectRoot $projectRoot
 if ($AllowUnsigned -and $UnsignedRelease) {
     throw 'AllowUnsigned and UnsignedRelease are mutually exclusive.'
+}
+if ($AllowRuntimeDrift -and (-not $AllowUnsigned -or $Publish)) {
+    throw 'AllowRuntimeDrift is limited to non-published -AllowUnsigned candidate builds.'
 }
 
 Push-Location $projectRoot
 try {
-    & (Join-Path $PSScriptRoot 'assert-runtime.ps1') -RuntimeDir $runtime -EnforceLock
+    if ($AllowRuntimeDrift) {
+        & (Join-Path $PSScriptRoot 'assert-runtime.ps1') -RuntimeDir $runtime
+    } else {
+        & (Join-Path $PSScriptRoot 'assert-runtime.ps1') -RuntimeDir $runtime -EnforceLock
+    }
     $env:ARHUB_RUNTIME_DIR = $runtime
+    $env:ARHUB_RUNTIME_PROFILE = $RuntimeProfile
     $env:PYTHONDONTWRITEBYTECODE = '1'
     $env:PYTHONUTF8 = '1'
     $env:PATH = (Join-Path $runtime 'python') + ';' + (Join-Path $runtime 'python\Scripts') + ';' + $env:PATH
@@ -58,16 +70,20 @@ try {
     if ($LASTEXITCODE -ne 0) { throw "electron-builder failed with exit code $LASTEXITCODE" }
 
     $packagedRuntime = Join-Path $projectRoot 'release\win-unpacked\runtime'
-    & (Join-Path $PSScriptRoot 'assert-runtime.ps1') -RuntimeDir $packagedRuntime -EnforceLock -SkipPythonDependencyCheck
+    if ($RuntimeProfile -eq 'lite') {
+        & (Join-Path $PSScriptRoot 'assert-lite-runtime.ps1') -RuntimeDir $packagedRuntime
+    } else {
+        & (Join-Path $PSScriptRoot 'assert-runtime.ps1') -RuntimeDir $packagedRuntime -EnforceLock -SkipPythonDependencyCheck
+    }
 
-    & (Join-Path $PSScriptRoot 'generate-sbom.ps1') -RuntimeDir $runtime
+    & (Join-Path $PSScriptRoot 'generate-sbom.ps1') -RuntimeDir $packagedRuntime
     & (Join-Path $PSScriptRoot 'create-checksums.ps1')
     if ($UnsignedRelease) {
-        & (Join-Path $PSScriptRoot 'verify-release.ps1') -RequireUnsigned
+        & (Join-Path $PSScriptRoot 'verify-release.ps1') -RequireUnsigned -RuntimeProfile $RuntimeProfile
     } elseif ($AllowUnsigned) {
-        & (Join-Path $PSScriptRoot 'verify-release.ps1') -AllowUnsigned
+        & (Join-Path $PSScriptRoot 'verify-release.ps1') -AllowUnsigned -RuntimeProfile $RuntimeProfile
     } else {
-        & (Join-Path $PSScriptRoot 'verify-release.ps1')
+        & (Join-Path $PSScriptRoot 'verify-release.ps1') -RuntimeProfile $RuntimeProfile
     }
 } finally {
     if ($env:ARHUB_EPHEMERAL_CERTIFICATE_PATH) {

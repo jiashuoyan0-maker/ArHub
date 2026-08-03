@@ -75,6 +75,10 @@ test('runtime workflow verifies and reuses only the explicitly configured locked
     path.join(__dirname, '..', 'scripts', 'package-runtime.ps1'),
     'utf8',
   );
+  const verifyRuntime = fs.readFileSync(
+    path.join(__dirname, '..', 'scripts', 'verify-runtime-bundle.ps1'),
+    'utf8',
+  );
   assert.match(runtimeWorkflow, /ARHUB_RUNTIME_BUNDLE_CACHE/);
   assert.match(runtimeWorkflow, /-ArchiveSeedDir/);
   assert.match(runtimeWorkflow, /-ReuseExistingArchives/);
@@ -82,6 +86,9 @@ test('runtime workflow verifies and reuses only the explicitly configured locked
   assert.match(packageRuntime, /Locked archive seed hash mismatch/);
   assert.match(packageRuntime, /Generated runtime bundle does not match the committed lock/);
   assert.match(packageRuntime, /Copy-Item -LiteralPath \$committedBundlePath -Destination \$bundlePath/);
+  assert.match(verifyRuntime, /-replace "`r`n", "`n" -replace "`r", "`n"/);
+  assert.match(verifyRuntime, /Runtime archive hash mismatch/);
+  assert.match(verifyRuntime, /SHA256SUMS\.txt mismatch/);
   assert.doesNotMatch(runtimeWorkflow, /gh release view/);
   assert.match(runtimeWorkflow, /gh release list/);
   assert.match(runtimeWorkflow, /\.tagName -ceq \$tag/);

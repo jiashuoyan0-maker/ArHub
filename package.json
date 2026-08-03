@@ -1,7 +1,7 @@
 {
   "name": "arhub",
   "productName": "ArHub",
-  "version": "1.0.9",
+  "version": "1.0.10",
   "description": "ArHub — AI 科研助手工作台（Electron + FastAPI + 技能工作流）",
   "main": "main.js",
   "author": "jiashuoyan0-maker",
@@ -42,6 +42,8 @@
     "runtime:lock": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/export-runtime-lock.ps1",
     "runtime:bundle": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/package-runtime.ps1 -UpdateRepositoryManifest",
     "package:win": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/build-windows.ps1 -UnsignedRelease",
+    "package:win:full": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/build-windows.ps1 -RuntimeProfile full -UnsignedRelease",
+    "package:win:lite": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/build-windows.ps1 -RuntimeProfile lite -UnsignedRelease",
     "package:win:unsigned": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/build-windows.ps1 -AllowUnsigned",
     "release:verify": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/verify-release.ps1 -RequireUnsigned",
     "release:smoke": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/smoke-test-installer.ps1"

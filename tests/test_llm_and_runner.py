@@ -79,6 +79,39 @@ class LlmClientTests(unittest.IsolatedAsyncioTestCase):
             with self.assertRaisesRegex(RuntimeError, "Base URL is not configured"):
                 await llm_client.get_agent_config("executor")
 
+    async def test_provider_reasoning_options_are_capability_aware(self) -> None:
+        glm_settings = {
+            "executor_base_url": "https://open.bigmodel.cn/api/paas/v4",
+            "executor_model_id": "glm-5",
+            "executor_provider": "auto",
+            "executor_reasoning_effort": "high",
+        }
+        with patch.object(
+            llm_client, "get_all_settings", AsyncMock(return_value=glm_settings)
+        ):
+            glm_config = await llm_client.get_agent_config("executor")
+        glm_body: dict[str, object] = {}
+        llm_client.apply_provider_options(glm_body, glm_config)
+        self.assertEqual(glm_config.provider, "glm")
+        self.assertEqual(glm_body, {"thinking": {"type": "enabled"}})
+
+        openai_settings = {
+            "executor_base_url": "https://api.openai.com/v1",
+            "executor_model_id": "gpt-5",
+            "executor_reasoning_effort": "max",
+            "executor_request_options": '{"parallel_tool_calls":true}',
+        }
+        with patch.object(
+            llm_client, "get_all_settings", AsyncMock(return_value=openai_settings)
+        ):
+            openai_config = await llm_client.get_agent_config("executor")
+        openai_body: dict[str, object] = {}
+        llm_client.apply_provider_options(openai_body, openai_config)
+        self.assertEqual(
+            openai_body,
+            {"reasoning_effort": "high", "parallel_tool_calls": True},
+        )
+
     async def test_chat_completion_streams_text_and_reassembles_tool_calls(self) -> None:
         seen: dict[str, object] = {}
         events = [
@@ -229,6 +262,9 @@ class RunnerTests(unittest.IsolatedAsyncioTestCase):
         with tempfile.TemporaryDirectory() as directory:
             with patch(
                 "backend.services.claude_runner.chat_completion", fake_chat
+            ), patch(
+                "backend.services.claude_runner.get_all_settings",
+                AsyncMock(return_value={"agent_runtime": "openai_compatible"}),
             ), patch.object(
                 runner, "_load_skill", return_value="Write RESULT.md and verify it."
             ):
@@ -244,6 +280,36 @@ class RunnerTests(unittest.IsolatedAsyncioTestCase):
             second_messages = fake_chat.await_args_list[1].args[1]
             self.assertEqual(second_messages[-1]["role"], "tool")
             self.assertEqual(second_messages[-1]["tool_call_id"], "call-1")
+
+    async def test_local_claude_runtime_is_selected_from_settings(self) -> None:
+        runner = ClaudeRunner()
+        local_result = {
+            "success": True,
+            "output": "done",
+            "runtime": "local_claude",
+            "output_files": [],
+        }
+        with tempfile.TemporaryDirectory() as directory:
+            with patch(
+                "backend.services.claude_runner.get_all_settings",
+                AsyncMock(
+                    return_value={
+                        "agent_runtime": "local_claude",
+                        "claude_bin": "claude",
+                        "claude_effort": "max",
+                    }
+                ),
+            ), patch.object(
+                runner, "_load_skill", return_value="Inspect the workspace."
+            ), patch.object(
+                runner, "_run_local_claude", AsyncMock(return_value=local_result)
+            ) as local_run:
+                result = await runner.run_skill(
+                    "test-skill", "Run locally", directory, "wf-local"
+                )
+
+        self.assertEqual(result["runtime"], "local_claude")
+        self.assertEqual(local_run.await_args.kwargs["settings"]["claude_effort"], "max")
 
     async def test_file_tools_reject_workspace_escape(self) -> None:
         runner = ClaudeRunner()

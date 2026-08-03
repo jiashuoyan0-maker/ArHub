@@ -72,26 +72,34 @@ powershell -NoProfile -ExecutionPolicy Bypass -File scripts\package-runtime.ps1 
 Review every lock diff before committing it.
 
 For a local lock check, point `ARHUB_RUNTIME_DIR` at the restored runtime before
-running `npm run runtime:check`. Without that variable, the command checks the
-runtime in the installed per-user ArHub directory.
+running `npm run runtime:check`. Without that variable, release tooling checks
+the repository-local `runtime` directory; it never infers build inputs from an
+installed copy of ArHub.
 
 ## Formal release
 
 1. Run `npm ci`, `npm test`, and `npm run audit:open-source`.
 2. Update `package.json` to the release version and commit all lock changes.
-3. Create and push the matching tag, for example `v1.0.9`.
+3. Create and push the matching tag, for example `v1.0.10`.
 4. The **Windows Release** workflow downloads the locked runtime, checks
    every archive against the committed hashes, builds
    the unsigned installer, requires all ArHub-owned executables to be `NotSigned`, emits CycloneDX SBOMs and
    SHA-256 checksums, installs and launches the application in smoke-test mode,
-   verifies the installed uninstaller state, uninstalls it, creates
+   verifies a custom destination containing spaces, checks the installed
+   uninstaller state and user-data preservation, uninstalls it, creates
    build-provenance attestations, and publishes the GitHub Release.
 
 The official local build uses the same unsigned-release gate:
 
 ```powershell
-npm run package:win
+npm run package:win:lite
+npm run package:win:full
 ```
+
+`lite` omits bundled Claude/Node, Git, TeX, Draw.io, Pandoc, and large optional
+Python ML packages. `full` retains the complete locked runtime. Build Lite last
+when it is the automatic-update target because Electron Builder writes one
+`latest.yml` for the most recent profile.
 
 `npm run package:win:unsigned` remains a local-candidate command. Its artifact
 name contains `-unsigned`; public Releases use `npm run package:win` and the
@@ -101,7 +109,7 @@ Run the same installation gate locally with:
 
 ```powershell
 powershell -NoProfile -ExecutionPolicy Bypass -File scripts\smoke-test-installer.ps1 `
-  -InstallerPath release\ArHub-Setup-1.0.9-x64.exe -RequireUnsigned
+  -InstallerPath release\ArHub-Setup-1.0.10-lite-x64.exe -RequireUnsigned
 ```
 
 ## Automated maintenance

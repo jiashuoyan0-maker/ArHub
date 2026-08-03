@@ -25,9 +25,9 @@ foreach ($name in $metadataNames) {
     $actualPath = Join-Path $bundle $name
     if (-not (Test-Path -LiteralPath $expectedPath -PathType Leaf)) { throw "Expected runtime metadata is missing: $expectedPath" }
     if (-not (Test-Path -LiteralPath $actualPath -PathType Leaf)) { throw "Downloaded runtime metadata is missing: $actualPath" }
-    $expectedHash = (Get-FileHash -LiteralPath $expectedPath -Algorithm SHA256).Hash
-    $actualHash = (Get-FileHash -LiteralPath $actualPath -Algorithm SHA256).Hash
-    if ($expectedHash -ne $actualHash) { throw "Runtime metadata does not match the repository lock: $name" }
+    $expectedText = [System.IO.File]::ReadAllText($expectedPath) -replace "`r`n", "`n" -replace "`r", "`n"
+    $actualText = [System.IO.File]::ReadAllText($actualPath) -replace "`r`n", "`n" -replace "`r", "`n"
+    if ($expectedText -cne $actualText) { throw "Runtime metadata does not match the repository lock: $name" }
 }
 
 $bundleManifest = Get-Content -LiteralPath (Join-Path $expected 'runtime-bundle.json') -Encoding UTF8 | ConvertFrom-Json

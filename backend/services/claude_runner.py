@@ -9,15 +9,18 @@ import json
 import logging
 import os
 import re
+import shutil
 from pathlib import Path
 from typing import Any, Awaitable, Callable
 
 try:
-    from config import SKILLS_DIR
+    from config import CLAUDE_BIN, SKILLS_DIR
     from services.llm_client import chat_completion, message_text
+    from services.state_store import get_all_settings
 except ModuleNotFoundError:  # Package import used by tests and library consumers.
-    from backend.config import SKILLS_DIR
+    from backend.config import CLAUDE_BIN, SKILLS_DIR
     from backend.services.llm_client import chat_completion, message_text
+    from backend.services.state_store import get_all_settings
 
 log = logging.getLogger(__name__)
 
@@ -337,6 +340,204 @@ class ClaudeRunner:
             )
         return f"Unsupported tool: {name}"
 
+    @staticmethod
+    def _resolve_claude_executable(configured: str) -> Path | None:
+        values = [configured, str(CLAUDE_BIN), "claude"]
+        for value in values:
+            raw = (value or "").strip().strip('"')
+            if not raw:
+                continue
+            supplied = Path(raw).expanduser()
+            candidate = supplied if supplied.is_file() else None
+            if candidate is None:
+                discovered = shutil.which(raw)
+                if discovered:
+                    candidate = Path(discovered)
+            if candidate is None or not candidate.is_file():
+                continue
+            if candidate.suffix.lower() in {".cmd", ".bat"}:
+                native = (
+                    candidate.parent
+                    / "node_modules"
+                    / "@anthropic-ai"
+                    / "claude-code"
+                    / "bin"
+                    / "claude.exe"
+                )
+                if native.is_file():
+                    candidate = native
+            if candidate.suffix.lower() not in {".cmd", ".bat"}:
+                return candidate.resolve()
+        return None
+
+    async def _run_local_claude(
+        self,
+        *,
+        root: Path,
+        workflow_id: str,
+        system_prompt: str,
+        user_prompt: str,
+        settings: dict[str, str],
+        cancel_event: asyncio.Event,
+        before: dict[str, tuple[int, int]],
+        on_output: OutputCallback | None,
+        on_delta: OutputCallback | None,
+        inactivity_timeout: int,
+        resume_session_id: str | None,
+    ) -> dict[str, Any]:
+        executable = self._resolve_claude_executable(
+            settings.get("claude_bin", "claude")
+        )
+        if executable is None:
+            raise FileNotFoundError(
+                "Local Claude Code was selected but no compatible executable was found"
+            )
+
+        permission_mode = settings.get("claude_permission_mode", "acceptEdits")
+        if permission_mode not in {"acceptEdits", "auto", "manual"}:
+            permission_mode = "acceptEdits"
+        args = [
+            str(executable),
+            "--print",
+            "--output-format",
+            "stream-json",
+            "--verbose",
+            "--include-partial-messages",
+            "--permission-mode",
+            permission_mode,
+            "--allowedTools",
+            "Read,Write,Edit,Glob,Grep,Bash",
+        ]
+        effort = settings.get("claude_effort", "high").strip().lower()
+        if effort in {"low", "medium", "high", "xhigh", "max"}:
+            args.extend(["--effort", effort])
+        model = settings.get("claude_model", "").strip()
+        if model:
+            args.extend(["--model", model])
+        if resume_session_id:
+            args.extend(["--resume", resume_session_id])
+
+        env = {key: str(value) for key, value in os.environ.items() if value is not None}
+        env.setdefault("PYTHONUTF8", "1")
+        process = await asyncio.create_subprocess_exec(
+            *args,
+            cwd=str(root),
+            env=env,
+            stdin=asyncio.subprocess.PIPE,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+        )
+        self._processes.setdefault(workflow_id, set()).add(process)
+        prompt = f"{system_prompt}\n\nTASK\n{user_prompt}"
+        assert process.stdin is not None
+        process.stdin.write(prompt.encode("utf-8"))
+        await process.stdin.drain()
+        process.stdin.close()
+
+        stderr_task = asyncio.create_task(process.stderr.read())
+        stream_text = ""
+        assistant_text = ""
+        result_text = ""
+        session_id = resume_session_id or ""
+        result_error = False
+        partial_seen = False
+        try:
+            assert process.stdout is not None
+            while True:
+                if cancel_event.is_set():
+                    if process.returncode is None:
+                        process.terminate()
+                    break
+                try:
+                    raw_line = await asyncio.wait_for(
+                        process.stdout.readline(), timeout=inactivity_timeout
+                    )
+                except asyncio.TimeoutError as exc:
+                    if process.returncode is None:
+                        process.terminate()
+                    raise RuntimeError(
+                        f"Local Claude Code produced no output for {inactivity_timeout}s"
+                    ) from exc
+                if not raw_line:
+                    break
+                try:
+                    event = json.loads(raw_line.decode("utf-8", errors="replace"))
+                except json.JSONDecodeError:
+                    continue
+                if not isinstance(event, dict):
+                    continue
+                session_id = str(event.get("session_id") or session_id)
+                event_type = event.get("type")
+                if event_type == "stream_event":
+                    stream_event = event.get("event") or {}
+                    delta = stream_event.get("delta") or {}
+                    text = delta.get("text") if isinstance(delta, dict) else None
+                    if isinstance(text, str) and text:
+                        partial_seen = True
+                        stream_text += text
+                        await self._emit(on_delta, text)
+                    content_block = stream_event.get("content_block") or {}
+                    if (
+                        stream_event.get("type") == "content_block_start"
+                        and isinstance(content_block, dict)
+                        and content_block.get("type") == "tool_use"
+                    ):
+                        await self._emit(
+                            on_output, f"\n[tool] {content_block.get('name', 'tool')}\n"
+                        )
+                elif event_type == "assistant":
+                    message = event.get("message") or {}
+                    blocks = message.get("content") if isinstance(message, dict) else []
+                    texts = [
+                        str(block.get("text"))
+                        for block in blocks or []
+                        if isinstance(block, dict)
+                        and block.get("type") == "text"
+                        and block.get("text")
+                    ]
+                    if texts:
+                        assistant_text = "".join(texts)
+                        if on_delta is not None and not partial_seen:
+                            await self._emit(on_delta, assistant_text)
+                elif event_type == "result":
+                    result_error = bool(event.get("is_error"))
+                    if isinstance(event.get("result"), str):
+                        result_text = event["result"]
+
+            return_code = await process.wait()
+            stderr = (await stderr_task).decode("utf-8", errors="replace").strip()
+            final_text = result_text or assistant_text or stream_text
+            if cancel_event.is_set():
+                return {
+                    "success": False,
+                    "cancelled": True,
+                    "output": final_text,
+                    "session_id": session_id,
+                    "output_files": self._changed_files(
+                        before, self._snapshot_files(root)
+                    ),
+                }
+            if return_code != 0 or result_error:
+                raise RuntimeError(
+                    stderr[-4000:]
+                    or final_text[-4000:]
+                    or f"Local Claude Code exited with code {return_code}"
+                )
+            if on_delta is None:
+                await self._emit(on_output, final_text)
+            return {
+                "success": True,
+                "output": final_text,
+                "result": final_text,
+                "session_id": session_id,
+                "output_files": self._changed_files(before, self._snapshot_files(root)),
+                "runtime": "local_claude",
+            }
+        finally:
+            if not stderr_task.done():
+                stderr_task.cancel()
+            self._processes.get(workflow_id, set()).discard(process)
+
     async def run_skill(
         self,
         skill_name: str,
@@ -387,6 +588,21 @@ class ClaudeRunner:
                 {"role": "system", "content": system},
                 {"role": "user", "content": "\n\n".join(user_parts)},
             ]
+            settings = await get_all_settings()
+            if settings.get("agent_runtime", "openai_compatible") == "local_claude":
+                return await self._run_local_claude(
+                    root=root,
+                    workflow_id=workflow_id,
+                    system_prompt=system,
+                    user_prompt="\n\n".join(user_parts),
+                    settings=settings,
+                    cancel_event=cancel_event,
+                    before=before,
+                    on_output=on_output,
+                    on_delta=on_delta,
+                    inactivity_timeout=inactivity_timeout,
+                    resume_session_id=resume_session_id,
+                )
 
             final_text = ""
             for round_number in range(1, 41):

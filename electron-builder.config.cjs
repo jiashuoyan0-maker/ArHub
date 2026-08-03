@@ -6,12 +6,50 @@ const { getSigningSuffixes } = require('./packaging/signing-policy.cjs');
 const projectDir = __dirname;
 const runtimeDir = process.env.ARHUB_RUNTIME_DIR
   ? path.resolve(process.env.ARHUB_RUNTIME_DIR)
-  : path.join(process.env.LOCALAPPDATA || '', 'Programs', 'ArHub', 'runtime');
+  : path.join(projectDir, 'runtime');
 const requireSigning = process.env.ARHUB_REQUIRE_SIGNING === '1';
 const publisherName = String(process.env.ARHUB_PUBLISHER_NAME || '').trim();
 const signingProvider = String(process.env.ARHUB_SIGNING_PROVIDER || 'pfx').toLowerCase();
 const artifactSuffix = process.env.ARHUB_ARTIFACT_SUFFIX || '';
+const runtimeProfile = String(process.env.ARHUB_RUNTIME_PROFILE || 'full').toLowerCase();
+if (!['full', 'lite'].includes(runtimeProfile)) {
+  throw new Error(`Unsupported ARHUB_RUNTIME_PROFILE: ${runtimeProfile}`);
+}
+const profileSuffix = runtimeProfile === 'lite' ? '-lite' : '';
 const signingSuffixes = getSigningSuffixes(packageMetadata.version, artifactSuffix);
+
+const liteExcludedComponents = ['node', 'git', 'pandoc', 'draw.io', 'texlive'];
+const liteExcludedPythonPackages = [
+  'tensorflow*',
+  'torch*',
+  'functorch*',
+  'paddle*',
+  'catboost*',
+  'cv2*',
+  'opencv*',
+  'xgboost*',
+  'llvmlite*',
+  'numba*',
+  'clang*',
+  'ortools*',
+  'pyarrow*',
+  'transformers*',
+  'modelscope*',
+  'rdkit*',
+  'pyogrio*',
+];
+const runtimeFilter = ['**/*'];
+if (runtimeProfile === 'lite') {
+  for (const component of liteExcludedComponents) {
+    runtimeFilter.push(`!${component}`, `!${component}/**/*`);
+  }
+  for (const packagePattern of liteExcludedPythonPackages) {
+    runtimeFilter.push(
+      `!python/Lib/site-packages/${packagePattern}`,
+      `!python/Lib/site-packages/${packagePattern}/**/*`,
+    );
+  }
+}
 
 if (!fs.existsSync(runtimeDir)) {
   throw new Error(`Full runtime was not found: ${runtimeDir}`);
@@ -23,7 +61,7 @@ if (requireSigning && !publisherName) {
 const win = {
   target: [{ target: 'nsis', arch: ['x64'] }],
   icon: 'icon.ico',
-  artifactName: `ArHub-Setup-\${version}-\${arch}${artifactSuffix}.\${ext}`,
+  artifactName: `ArHub-Setup-\${version}${profileSuffix}-\${arch}${artifactSuffix}.\${ext}`,
   requestedExecutionLevel: 'asInvoker',
   signAndEditExecutable: true,
   signExecutable: requireSigning,
@@ -61,6 +99,9 @@ module.exports = {
   compression: 'maximum',
   npmRebuild: false,
   forceCodeSigning: requireSigning,
+  extraMetadata: {
+    arhubRuntimeProfile: runtimeProfile,
+  },
   directories: {
     output: 'release',
     buildResources: '.',
@@ -93,14 +134,15 @@ module.exports = {
     {
       from: runtimeDir,
       to: 'runtime',
-      filter: ['**/*'],
+      filter: runtimeFilter,
     },
   ],
   win,
   nsis: {
-    oneClick: true,
+    oneClick: false,
     perMachine: false,
     allowElevation: true,
+    allowToChangeInstallationDirectory: true,
     createDesktopShortcut: true,
     createStartMenuShortcut: true,
     shortcutName: 'ArHub',

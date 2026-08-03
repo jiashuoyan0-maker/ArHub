@@ -30,16 +30,25 @@ AGENT_KEYS: dict[str, dict[str, str]] = {
         "base_url": "executor_base_url",
         "api_key": "executor_api_key",
         "model_id": "executor_model_id",
+        "provider": "executor_provider",
+        "reasoning_effort": "executor_reasoning_effort",
+        "request_options": "executor_request_options",
     },
     "reviewer": {
         "base_url": "reviewer_base_url",
         "api_key": "reviewer_api_key",
         "model_id": "reviewer_model_id",
+        "provider": "reviewer_provider",
+        "reasoning_effort": "reviewer_reasoning_effort",
+        "request_options": "reviewer_request_options",
     },
     "editor_ai": {
         "base_url": "editor_ai_base_url",
         "api_key": "editor_ai_api_key",
         "model_id": "editor_ai_model_id",
+        "provider": "editor_ai_provider",
+        "reasoning_effort": "editor_ai_reasoning_effort",
+        "request_options": "editor_ai_request_options",
     },
 }
 
@@ -65,6 +74,9 @@ class AgentConfig:
     api_key: str
     model_id: str
     extra_headers: dict[str, str]
+    provider: str
+    reasoning_effort: str
+    request_options: dict[str, Any]
 
 
 def _parse_extra_headers(raw: str, agent: str) -> dict[str, str]:
@@ -79,6 +91,73 @@ def _parse_extra_headers(raw: str, agent: str) -> dict[str, str]:
     ):
         raise ValueError(f"[{agent}] extra headers must be a string-to-string object")
     return value
+
+
+def _parse_request_options(raw: str, agent: str) -> dict[str, Any]:
+    if not raw.strip():
+        return {}
+    try:
+        value = json.loads(raw)
+    except json.JSONDecodeError as exc:
+        raise ValueError(f"[{agent}] request options must be valid JSON") from exc
+    if not isinstance(value, dict):
+        raise ValueError(f"[{agent}] request options must be a JSON object")
+    reserved = {"model", "messages", "tools", "tool_choice", "stream"}
+    blocked = sorted(reserved.intersection(value))
+    if blocked:
+        raise ValueError(
+            f"[{agent}] request options cannot override: {', '.join(blocked)}"
+        )
+    return value
+
+
+def detect_provider(base_url: str, model_id: str, configured: str = "auto") -> str:
+    selected = (configured or "auto").strip().lower()
+    if selected not in {"auto", "deepseek", "glm", "openai", "generic"}:
+        raise ValueError(f"Unsupported provider: {configured}")
+    if selected != "auto":
+        return selected
+    marker = f"{base_url} {model_id}".lower()
+    if "deepseek" in marker:
+        return "deepseek"
+    if any(token in marker for token in ("bigmodel", "zhipu", "glm")):
+        return "glm"
+    if "openai.com" in marker or model_id.lower().startswith(("gpt-", "o1", "o3", "o4")):
+        return "openai"
+    return "generic"
+
+
+def apply_provider_options(body: dict[str, Any], config: AgentConfig) -> None:
+    effort = config.reasoning_effort
+    if effort not in {"default", "off", "low", "medium", "high", "xhigh", "max"}:
+        raise ValueError(f"[{config.agent}] unsupported reasoning effort: {effort}")
+    if effort != "default":
+        if config.provider == "glm":
+            body["thinking"] = {"type": "disabled" if effort == "off" else "enabled"}
+        elif config.provider == "openai":
+            body["reasoning_effort"] = {
+                "off": "none",
+                "xhigh": "high",
+                "max": "high",
+            }.get(effort, effort)
+    body.update(config.request_options)
+
+
+def provider_summary(config: AgentConfig) -> dict[str, Any]:
+    if config.provider == "glm":
+        reasoning = "toggle"
+    elif config.provider == "openai":
+        reasoning = "effort"
+    elif config.provider == "deepseek":
+        reasoning = "model"
+    else:
+        reasoning = "custom"
+    return {
+        "provider": config.provider,
+        "model_id": config.model_id,
+        "reasoning_control": reasoning,
+        "reasoning_effort": config.reasoning_effort,
+    }
 
 
 async def get_agent_config(agent: str) -> AgentConfig:
@@ -96,7 +175,23 @@ async def get_agent_config(agent: str) -> AgentConfig:
     extra_headers = _parse_extra_headers(
         settings.get(f"{agent}_extra_headers", ""), agent
     )
-    return AgentConfig(agent, base_url, api_key, model_id, extra_headers)
+    provider = detect_provider(
+        base_url, model_id, settings.get(keys["provider"], "auto")
+    )
+    reasoning_effort = settings.get(keys["reasoning_effort"], "default").strip().lower()
+    request_options = _parse_request_options(
+        settings.get(keys["request_options"], ""), agent
+    )
+    return AgentConfig(
+        agent,
+        base_url,
+        api_key,
+        model_id,
+        extra_headers,
+        provider,
+        reasoning_effort,
+        request_options,
+    )
 
 
 def _headers(config: AgentConfig) -> dict[str, str]:
@@ -295,6 +390,7 @@ async def chat_completion(
         body["temperature"] = temperature
     if on_delta is not None:
         body["stream"] = True
+    apply_provider_options(body, config)
 
     owns_client = client is None
     if client is None:

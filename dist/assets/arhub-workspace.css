@@ -867,7 +867,7 @@ html.mw-editor-active .nav-bar > div {
   display: inline-flex;
   align-items: center;
   min-width: 0;
-  max-width: min(48%, 240px);
+  max-width: min(64%, 520px);
   height: 32px;
   margin-left: auto;
   padding: 0 9px;
@@ -891,6 +891,45 @@ html.mw-editor-active .nav-bar > div {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.mw-runtime-select,
+.mw-effort-select {
+  min-width: 0;
+  height: 26px;
+  padding: 0 22px 0 7px;
+  color: var(--text-secondary);
+  border: 0;
+  border-left: 1px solid color-mix(in srgb, var(--border) 70%, transparent);
+  border-radius: 0;
+  outline: 0;
+  background-color: transparent;
+  font: inherit;
+  cursor: pointer;
+}
+
+.mw-runtime-select {
+  max-width: 118px;
+}
+
+.mw-effort-select {
+  max-width: 78px;
+}
+
+.mw-runtime-select:focus-visible,
+.mw-effort-select:focus-visible {
+  color: var(--text-primary);
+  background: color-mix(in srgb, var(--apple-fill) 88%, transparent);
+}
+
+@media (max-width: 900px) {
+  .mw-composer-model-text {
+    display: none;
+  }
+
+  .mw-composer-model {
+    max-width: min(58%, 270px);
+  }
 }
 
 .mw-attachment-input {
