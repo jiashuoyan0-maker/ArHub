@@ -542,6 +542,10 @@ class RunnerTests(unittest.IsolatedAsyncioTestCase):
         }
         with patch.object(
             settings_router, "get_all_settings", AsyncMock(return_value=stored)
+        ), patch.object(
+            settings_router,
+            "get_agent_config",
+            AsyncMock(side_effect=RuntimeError("provider is not configured")),
         ):
             status = await settings_router.provider_status()
 

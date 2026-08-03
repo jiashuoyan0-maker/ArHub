@@ -39,22 +39,26 @@ jobs:
     timeout-minutes: 90
     env:
       GH_TOKEN: ${{ github.token }}
+      SOURCE_SHA: ${{ github.event.workflow_run.head_sha || inputs.source_sha }}
 
     steps:
+      - name: Validate requested source
+        shell: powershell
+        run: |
+          if ($env:SOURCE_SHA -notmatch '^[0-9a-fA-F]{40}$') {
+            throw 'Source SHA must be a complete 40-character hexadecimal commit ID.'
+          }
+
       - name: Check out verified source
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
-          ref: ${{ github.event.workflow_run.head_sha || inputs.source_sha }}
+          ref: ${{ env.SOURCE_SHA }}
           fetch-depth: 0
 
       - name: Verify checked out source
         shell: powershell
         run: |
-          $expected = if ('${{ github.event_name }}' -eq 'workflow_run') {
-            '${{ github.event.workflow_run.head_sha }}'
-          } else {
-            '${{ inputs.source_sha }}'
-          }
+          $expected = $env:SOURCE_SHA.ToLowerInvariant()
           if ($expected -ne (git rev-parse HEAD)) {
             throw 'Checked out commit does not match the requested source.'
           }
@@ -133,7 +137,7 @@ jobs:
           )
           gh release create '${{ steps.version.outputs.tag }}' @files `
             --repo '${{ github.repository }}' `
-            --target '${{ github.event.workflow_run.head_sha || inputs.source_sha }}' `
+            --target $env:SOURCE_SHA `
             --prerelease `
             --generate-notes `
             --title 'ArHub v${{ steps.version.outputs.version }} app-only candidate'

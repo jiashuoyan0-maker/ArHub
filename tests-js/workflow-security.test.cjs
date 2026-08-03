@@ -140,6 +140,11 @@ test('app-only candidates are isolated from Full builds and runtime inputs', () 
   assert.match(workflow, /workflow_run\.head_sha.*git rev-parse HEAD/s);
   assert.match(workflow, /inputs\.publish == true/);
   assert.match(workflow, /source_sha:/);
+  assert.match(workflow, /SOURCE_SHA: \$\{\{ github\.event\.workflow_run\.head_sha \|\| inputs\.source_sha \}\}/);
+  assert.match(workflow, /SOURCE_SHA -notmatch '\^\[0-9a-fA-F\]\{40\}\$'/);
+  assert.match(workflow, /ref: \$\{\{ env\.SOURCE_SHA \}\}/);
+  assert.match(workflow, /--target \$env:SOURCE_SHA/);
+  assert.doesNotMatch(workflow, /'\$\{\{ inputs\.source_sha \}\}'/);
   assert.match(workflow, /merge-base --is-ancestor \$expected origin\/main/);
   assert.doesNotMatch(workflow, /workflow_run\.head_sha \|\| github\.sha/);
   assert.match(workflow, /-RuntimeProfile app-only\b/);
