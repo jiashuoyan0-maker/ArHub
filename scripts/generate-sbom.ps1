@@ -20,7 +20,7 @@ if ($LASTEXITCODE -ne 0) { throw "npm SBOM generation failed: $npmSbom" }
 
 $pythonExe = Join-Path $RuntimeDir 'python\python.exe'
 if (-not (Test-Path -LiteralPath $pythonExe -PathType Leaf)) { throw "Python runtime not found: $pythonExe" }
-$packagesJson = (& $pythonExe -X utf8 -m pip list --format=json 2>&1 | Out-String)
+$packagesJson = (& $pythonExe -B -X utf8 -m pip list --format=json 2>&1 | Out-String)
 if ($LASTEXITCODE -ne 0) { throw "Python package inventory failed: $packagesJson" }
 $packages = $packagesJson | ConvertFrom-Json
 $components = @($packages | Sort-Object name | ForEach-Object {

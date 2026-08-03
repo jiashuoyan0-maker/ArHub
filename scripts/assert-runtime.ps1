@@ -10,6 +10,7 @@ param(
 
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
+$env:PYTHONDONTWRITEBYTECODE = '1'
 $projectRoot = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path
 . (Join-Path $PSScriptRoot 'runtime-paths.ps1')
 $RuntimeDir = Resolve-ArHubRuntimeDir -RuntimeDir $RuntimeDir -ProjectRoot $projectRoot
@@ -152,7 +153,7 @@ if (-not $SkipPythonDependencyCheck -and (Test-Path -LiteralPath $pythonExe)) {
     $previousErrorAction = $ErrorActionPreference
     try {
         $ErrorActionPreference = 'Continue'
-        $pipCheck = (& $pythonExe -X utf8 -m pip check 2>&1 | Out-String).Trim()
+        $pipCheck = (& $pythonExe -B -X utf8 -m pip check 2>&1 | Out-String).Trim()
     } finally {
         $ErrorActionPreference = $previousErrorAction
     }
@@ -162,7 +163,7 @@ if (-not $SkipPythonDependencyCheck -and (Test-Path -LiteralPath $pythonExe)) {
 
     if (Test-Path -LiteralPath $PythonLockPath -PathType Leaf) {
         $expected = @(Get-Content -LiteralPath $PythonLockPath -Encoding UTF8 | Where-Object { $_ -and -not $_.StartsWith('#') } | Sort-Object)
-        $actual = @(& $pythonExe -X utf8 -m pip freeze --all | Sort-Object)
+        $actual = @(& $pythonExe -B -X utf8 -m pip freeze --all | Sort-Object)
         $difference = @(Compare-Object -ReferenceObject $expected -DifferenceObject $actual)
         if ($difference.Count -gt 0) {
             $preview = ($difference | Select-Object -First 12 | Out-String).Trim()

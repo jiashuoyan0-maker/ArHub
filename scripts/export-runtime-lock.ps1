@@ -23,7 +23,7 @@ $manifest = Get-Content -LiteralPath $manifestFile -Encoding UTF8 | ConvertFrom-
 & (Join-Path $PSScriptRoot 'assert-runtime.ps1') -RuntimeDir $runtime -ManifestPath $manifestFile -SkipPythonDependencyCheck
 
 $pythonExe = Join-Path $runtime 'python\python.exe'
-$pythonPackages = @(& $pythonExe -X utf8 -m pip freeze --all | Sort-Object)
+$pythonPackages = @(& $pythonExe -B -X utf8 -m pip freeze --all | Sort-Object)
 $utf8 = New-Object System.Text.UTF8Encoding($false)
 $pythonLockFullPath = [System.IO.Path]::GetFullPath($PythonLockPath)
 [System.IO.Directory]::CreateDirectory([System.IO.Path]::GetDirectoryName($pythonLockFullPath)) | Out-Null

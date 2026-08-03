@@ -69,6 +69,19 @@ test('runtime archives exclude volatile timestamps for reproducible hashes', () 
   }
 });
 
+test('runtime inspection never rewrites embedded Python bytecode', () => {
+  for (const relativePath of [
+    'scripts/assert-runtime.ps1',
+    'scripts/generate-sbom.ps1',
+    'scripts/export-runtime-lock.ps1',
+  ]) {
+    const script = fs.readFileSync(path.join(__dirname, '..', relativePath), 'utf8');
+    for (const line of script.split(/\r?\n/).filter((entry) => /&\s*\$pythonExe\b/.test(entry))) {
+      assert.match(line, /\s-B\s+-X\s+utf8\b/, `${relativePath} must disable bytecode writes: ${line}`);
+    }
+  }
+});
+
 test('runtime workflow verifies and reuses only the explicitly configured locked cache', () => {
   const runtimeWorkflow = fs.readFileSync(path.join(workflowDir, 'runtime-bundle.yml'), 'utf8');
   const packageRuntime = fs.readFileSync(
