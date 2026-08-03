@@ -138,13 +138,19 @@ class EditorAgentTests(unittest.IsolatedAsyncioTestCase):
                 events.append(await run.queue.get())
 
             streamed = [
-                event["message"]
+                event["data"]["text"]
                 for event in events
                 if isinstance(event, dict)
-                and event.get("type") == "progress"
-                and event.get("streaming") is True
+                and event.get("protocol") == "arhub.agent.v1"
+                and event.get("event") == "agent.text_delta"
             ]
             self.assertEqual(streamed, ["Revision ", "Revision complete"])
+            sequences = [event["sequence"] for event in events if isinstance(event, dict)]
+            self.assertEqual(sequences, list(range(1, len(sequences) + 1)))
+            self.assertEqual(events[0]["event"], "agent.started")
+            self.assertEqual(events[0]["type"], "progress")
+            self.assertEqual(events[-2]["event"], "agent.completed")
+            self.assertEqual(events[-2]["type"], "result")
             self.assertEqual(
                 manager.check("wf-stream", workspace)["stream_text"],
                 "Revision complete",

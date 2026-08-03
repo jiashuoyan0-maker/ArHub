@@ -27,6 +27,7 @@ DeltaCallback = Callable[[str], Awaitable[None] | None]
 
 AGENT_KEYS: dict[str, dict[str, str]] = {
     "executor": {
+        "kernel": "executor_agent_runtime",
         "base_url": "executor_base_url",
         "api_key": "executor_api_key",
         "model_id": "executor_model_id",
@@ -35,6 +36,7 @@ AGENT_KEYS: dict[str, dict[str, str]] = {
         "request_options": "executor_request_options",
     },
     "reviewer": {
+        "kernel": "reviewer_agent_runtime",
         "base_url": "reviewer_base_url",
         "api_key": "reviewer_api_key",
         "model_id": "reviewer_model_id",
@@ -43,12 +45,35 @@ AGENT_KEYS: dict[str, dict[str, str]] = {
         "request_options": "reviewer_request_options",
     },
     "editor_ai": {
+        "kernel": "editor_ai_agent_runtime",
         "base_url": "editor_ai_base_url",
         "api_key": "editor_ai_api_key",
         "model_id": "editor_ai_model_id",
         "provider": "editor_ai_provider",
         "reasoning_effort": "editor_ai_reasoning_effort",
         "request_options": "editor_ai_request_options",
+    },
+}
+
+AGENT_KERNELS = {"openai_compatible", "local_claude"}
+REASONING_EFFORTS = {"default", "off", "low", "medium", "high", "xhigh", "max"}
+
+_REASONING_CAPABILITIES: dict[str, dict[str, Any]] = {
+    "openai": {
+        "control": "effort",
+        "supported": ("default", "off", "low", "medium", "high"),
+    },
+    "deepseek": {
+        "control": "thinking_and_effort",
+        "supported": ("default", "off", "low", "high", "max"),
+    },
+    "glm": {
+        "control": "toggle",
+        "supported": ("default", "off", "high"),
+    },
+    "generic": {
+        "control": "request_options",
+        "supported": ("default",),
     },
 }
 
@@ -79,6 +104,28 @@ class AgentConfig:
     request_options: dict[str, Any]
 
 
+@dataclass(frozen=True)
+class ReasoningResolution:
+    requested: str
+    effective: str
+    control: str
+    supported_values: tuple[str, ...]
+    applied_options: dict[str, Any]
+    downgraded: bool = False
+    message: str | None = None
+
+    def as_dict(self) -> dict[str, Any]:
+        return {
+            "requested": self.requested,
+            "effective": self.effective,
+            "control": self.control,
+            "supported_values": list(self.supported_values),
+            "downgraded": self.downgraded,
+            "message": self.message,
+            "applied_options": self.applied_options.copy(),
+        }
+
+
 def _parse_extra_headers(raw: str, agent: str) -> dict[str, str]:
     if not raw.strip():
         return {}
@@ -102,7 +149,15 @@ def _parse_request_options(raw: str, agent: str) -> dict[str, Any]:
         raise ValueError(f"[{agent}] request options must be valid JSON") from exc
     if not isinstance(value, dict):
         raise ValueError(f"[{agent}] request options must be a JSON object")
-    reserved = {"model", "messages", "tools", "tool_choice", "stream"}
+    reserved = {
+        "model",
+        "messages",
+        "tools",
+        "tool_choice",
+        "stream",
+        "reasoning_effort",
+        "thinking",
+    }
     blocked = sorted(reserved.intersection(value))
     if blocked:
         raise ValueError(
@@ -127,36 +182,95 @@ def detect_provider(base_url: str, model_id: str, configured: str = "auto") -> s
     return "generic"
 
 
-def apply_provider_options(body: dict[str, Any], config: AgentConfig) -> None:
-    effort = config.reasoning_effort
-    if effort not in {"default", "off", "low", "medium", "high", "xhigh", "max"}:
-        raise ValueError(f"[{config.agent}] unsupported reasoning effort: {effort}")
-    if effort != "default":
-        if config.provider == "glm":
-            body["thinking"] = {"type": "disabled" if effort == "off" else "enabled"}
-        elif config.provider == "openai":
-            body["reasoning_effort"] = {
-                "off": "none",
-                "xhigh": "high",
-                "max": "high",
-            }.get(effort, effort)
+def agent_kernel(settings: dict[str, str], agent: str) -> str:
+    """Resolve a role kernel while preserving the v1.0.11 global setting."""
+    if agent not in AGENT_KEYS:
+        raise ValueError(f"Unknown agent: {agent}")
+    key = AGENT_KEYS[agent]["kernel"]
+    selected = settings.get(key) or settings.get("agent_runtime", "openai_compatible")
+    selected = selected.strip().lower()
+    if selected not in AGENT_KERNELS:
+        raise ValueError(f"[{agent}] unsupported agent kernel: {selected}")
+    return selected
+
+
+def resolve_reasoning(config: AgentConfig) -> ReasoningResolution:
+    """Map the requested effort to a provider-supported Chat Completions body."""
+    requested = config.reasoning_effort
+    if requested not in REASONING_EFFORTS:
+        raise ValueError(f"[{config.agent}] unsupported reasoning effort: {requested}")
+    capability = _REASONING_CAPABILITIES[config.provider]
+    supported = capability["supported"]
+    effective = requested
+    message: str | None = None
+    options: dict[str, Any] = {}
+
+    if config.provider == "openai":
+        effective = {"xhigh": "high", "max": "high"}.get(requested, requested)
+        if effective != "default":
+            options["reasoning_effort"] = "none" if effective == "off" else effective
+    elif config.provider == "deepseek":
+        effective = {
+            "medium": "high",
+            "xhigh": "max",
+            "max": "high" if config.model_id.lower() == "deepseek-reasoner" else "max",
+        }.get(requested, requested)
+        if effective != "default":
+            options["thinking"] = {
+                "type": "disabled" if effective == "off" else "enabled"
+            }
+            if effective != "off":
+                options["reasoning_effort"] = effective
+    elif config.provider == "glm":
+        if requested not in {"default", "off"}:
+            effective = "high"
+        if effective != "default":
+            options["thinking"] = {
+                "type": "disabled" if effective == "off" else "enabled"
+            }
+    elif requested != "default":
+        effective = "default"
+
+    downgraded = effective != requested
+    if downgraded:
+        message = (
+            f"{config.provider} cannot apply reasoning effort '{requested}' exactly; "
+            f"using '{effective}'"
+        )
+    elif requested != "default" and not options:
+        message = (
+            f"{config.provider} has no standardized reasoning parameter; "
+            "the requested effort was not sent"
+        )
+        downgraded = True
+    return ReasoningResolution(
+        requested=requested,
+        effective=effective,
+        control=capability["control"],
+        supported_values=supported,
+        applied_options=options,
+        downgraded=downgraded,
+        message=message,
+    )
+
+
+def apply_provider_options(
+    body: dict[str, Any], config: AgentConfig
+) -> ReasoningResolution:
+    resolution = resolve_reasoning(config)
+    body.update(resolution.applied_options)
     body.update(config.request_options)
+    return resolution
 
 
 def provider_summary(config: AgentConfig) -> dict[str, Any]:
-    if config.provider == "glm":
-        reasoning = "toggle"
-    elif config.provider == "openai":
-        reasoning = "effort"
-    elif config.provider == "deepseek":
-        reasoning = "model"
-    else:
-        reasoning = "custom"
+    resolution = resolve_reasoning(config)
     return {
         "provider": config.provider,
         "model_id": config.model_id,
-        "reasoning_control": reasoning,
+        "reasoning_control": resolution.control,
         "reasoning_effort": config.reasoning_effort,
+        "reasoning": resolution.as_dict(),
     }
 
 
@@ -379,6 +493,11 @@ async def chat_completion(
     on_delta: DeltaCallback | None = None,
 ) -> dict[str, Any]:
     """Send a chat-completions request and return the provider response."""
+    settings = await get_all_settings()
+    if agent_kernel(settings, agent) != "openai_compatible":
+        raise RuntimeError(
+            f"[{agent}] local_claude is a CLI Agent kernel, not a Chat Completions provider"
+        )
     config = await get_agent_config(agent)
     body: dict[str, Any] = {"model": config.model_id, "messages": messages}
     if tools:
@@ -452,6 +571,15 @@ def message_text(message: dict[str, Any]) -> str:
 
 
 async def call_llm(agent: str, prompt: str, timeout: int = 300) -> str:
+    settings = await get_all_settings()
+    if agent_kernel(settings, agent) == "local_claude":
+        try:
+            from services.claude_runner import ClaudeRunner
+        except ModuleNotFoundError:
+            from backend.services.claude_runner import ClaudeRunner
+        return await ClaudeRunner.run_text(
+            agent, prompt, settings, timeout=timeout
+        )
     payload = await chat_completion(
         agent, [{"role": "user", "content": prompt}], timeout=timeout
     )

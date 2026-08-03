@@ -2,28 +2,33 @@
 
 from __future__ import annotations
 
-import asyncio
 import re
-import shutil
-from pathlib import Path
 from typing import Any
 
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 
 try:
-    from config import CLAUDE_BIN
+    from models.schemas import AgentCapabilitiesInfo, ClaudeDetectionInfo
+    from services.claude_runner import ClaudeRunner
     from services.llm_client import (
         AGENT_KEYS,
+        AGENT_KERNELS,
+        REASONING_EFFORTS,
+        agent_kernel,
         get_agent_config,
         provider_summary,
         test_connection,
     )
     from services.state_store import get_all_settings, save_settings
 except ModuleNotFoundError:  # Package import used by tests and library consumers.
-    from backend.config import CLAUDE_BIN
+    from backend.models.schemas import AgentCapabilitiesInfo, ClaudeDetectionInfo
+    from backend.services.claude_runner import ClaudeRunner
     from backend.services.llm_client import (
         AGENT_KEYS,
+        AGENT_KERNELS,
+        REASONING_EFFORTS,
+        agent_kernel,
         get_agent_config,
         provider_summary,
         test_connection,
@@ -62,6 +67,8 @@ DEFAULT_SETTINGS: dict[str, str] = {
     "claude_effort": "high",
     "claude_permission_mode": "acceptEdits",
 }
+for _agent_name in AGENT_KEYS:
+    DEFAULT_SETTINGS[f"{_agent_name}_claude_model"] = ""
 SENSITIVE_KEYS = {
     key
     for key in DEFAULT_SETTINGS
@@ -69,7 +76,7 @@ SENSITIVE_KEYS = {
 }
 _KEY_RE = re.compile(r"^[A-Za-z][A-Za-z0-9_.-]{0,127}$")
 _SETTING_CHOICES = {
-    "agent_runtime": {"openai_compatible", "local_claude"},
+    "agent_runtime": AGENT_KERNELS,
     "claude_effort": {"default", "low", "medium", "high", "xhigh", "max"},
     "claude_permission_mode": {"acceptEdits", "auto", "manual"},
 }
@@ -81,15 +88,7 @@ for _agent_name in AGENT_KEYS:
         "openai",
         "generic",
     }
-    _SETTING_CHOICES[f"{_agent_name}_reasoning_effort"] = {
-        "default",
-        "off",
-        "low",
-        "medium",
-        "high",
-        "xhigh",
-        "max",
-    }
+    _SETTING_CHOICES[f"{_agent_name}_reasoning_effort"] = REASONING_EFFORTS
 
 
 class SettingsUpdate(BaseModel):
@@ -141,79 +140,95 @@ async def update_settings(body: SettingsUpdate) -> dict[str, Any]:
 async def test_agent_connection(agent: str) -> dict[str, Any]:
     if agent not in AGENT_KEYS:
         raise HTTPException(status_code=404, detail=f"Unknown agent: {agent}")
+    settings = {**DEFAULT_SETTINGS, **(await get_all_settings())}
+    if agent_kernel(settings, agent) == "local_claude":
+        detected = await ClaudeRunner.detect_local_claude(settings)
+        return {
+            "ok": detected["compatible"],
+            "message": detected["message"],
+            "runtime": "local_claude",
+            "executable": detected["recommended"],
+        }
     return await test_connection(agent)
 
 
-@router.get("/providers")
-async def provider_status() -> dict[str, Any]:
+@router.get("/providers", response_model=AgentCapabilitiesInfo)
+async def provider_status() -> AgentCapabilitiesInfo:
+    settings = {**DEFAULT_SETTINGS, **(await get_all_settings())}
     agents: dict[str, Any] = {}
     for agent in AGENT_KEYS:
+        kernel = agent_kernel(settings, agent)
+        if kernel == "local_claude":
+            role_effort = settings.get(f"{agent}_reasoning_effort", "")
+            requested = (
+                role_effort
+                if role_effort
+                and (
+                    role_effort != "default"
+                    or bool(settings.get(f"{agent}_agent_runtime", "").strip())
+                )
+                else settings.get("claude_effort", "default")
+            )
+            effective = "default" if requested in {"default", "off"} else requested
+            agents[agent] = {
+                "configured": True,
+                "kernel": kernel,
+                "model_id": settings.get(f"{agent}_claude_model")
+                or settings.get("claude_model", ""),
+                "reasoning_control": "effort",
+                "reasoning_effort": requested,
+                "reasoning": {
+                    "requested": requested,
+                    "effective": effective,
+                    "control": "effort",
+                    "supported_values": [
+                        "default",
+                        "low",
+                        "medium",
+                        "high",
+                        "xhigh",
+                        "max",
+                    ],
+                    "downgraded": requested == "off",
+                    "message": (
+                        "Claude Code does not expose an off value; using its default effort."
+                        if requested == "off"
+                        else None
+                    ),
+                },
+            }
+            continue
         try:
-            agents[agent] = {"configured": True, **provider_summary(await get_agent_config(agent))}
+            agents[agent] = {
+                "configured": True,
+                "kernel": kernel,
+                **provider_summary(await get_agent_config(agent)),
+            }
         except (RuntimeError, ValueError) as exc:
-            agents[agent] = {"configured": False, "message": str(exc)}
-    return {"agents": agents}
+            agents[agent] = {
+                "configured": False,
+                "kernel": kernel,
+                "message": str(exc),
+            }
+    return AgentCapabilitiesInfo(
+        agents=agents,
+        kernels={
+            "openai_compatible": {
+                "requires": ["base_url", "model_id"],
+                "providers": ["auto", "deepseek", "glm", "openai", "generic"],
+            },
+            "local_claude": {
+                "requires": ["compatible_claude_code"],
+                "detection_endpoint": "/api/settings/detect-claude",
+            },
+        },
+    )
 
 
-async def _version(path: str) -> str:
-    try:
-        process = await asyncio.create_subprocess_exec(
-            path,
-            "--version",
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.STDOUT,
-        )
-        output, _ = await asyncio.wait_for(process.communicate(), timeout=5)
-        return output.decode("utf-8", errors="replace").strip()[:200]
-    except Exception as exc:
-        return f"unavailable: {type(exc).__name__}"
-
-
-def _resolved_claude_path(value: str) -> str | None:
-    raw = (value or "").strip().strip('"')
-    if not raw:
-        return None
-    supplied = Path(raw).expanduser()
-    candidate = supplied if supplied.is_file() else None
-    if candidate is None:
-        discovered = shutil.which(raw)
-        if discovered:
-            candidate = Path(discovered)
-    if candidate is None or not candidate.is_file():
-        return None
-    if candidate.suffix.lower() in {".cmd", ".bat"}:
-        native = (
-            candidate.parent
-            / "node_modules"
-            / "@anthropic-ai"
-            / "claude-code"
-            / "bin"
-            / "claude.exe"
-        )
-        if native.is_file():
-            candidate = native
-    return str(candidate.resolve())
-
-
-@router.get("/detect-claude")
-async def detect_claude() -> dict[str, Any]:
+@router.get("/detect-claude", response_model=ClaudeDetectionInfo)
+async def detect_claude() -> ClaudeDetectionInfo:
     """Detect usable local and bundled Claude Code executables."""
     settings = {**DEFAULT_SETTINGS, **(await get_all_settings())}
-    candidates: list[str] = []
-    for value in (settings.get("claude_bin", "claude"), str(CLAUDE_BIN), "claude"):
-        resolved = _resolved_claude_path(value)
-        if resolved and resolved.casefold() not in {item.casefold() for item in candidates}:
-            candidates.append(resolved)
-    details = [{"path": path, "version": await _version(path)} for path in candidates]
-    return {
-        "recommended": candidates[0] if candidates else None,
-        "candidates": details,
-        "required": False,
-        "selected_runtime": settings["agent_runtime"],
-        "compatible": bool(candidates),
-        "message": (
-            "Local Claude Code is ready."
-            if candidates
-            else "No local Claude Code executable was detected; use the open model runtime."
-        ),
-    }
+    return ClaudeDetectionInfo.model_validate(
+        await ClaudeRunner.detect_local_claude(settings)
+    )

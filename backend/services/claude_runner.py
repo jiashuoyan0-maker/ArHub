@@ -15,11 +15,11 @@ from typing import Any, Awaitable, Callable
 
 try:
     from config import CLAUDE_BIN, SKILLS_DIR
-    from services.llm_client import chat_completion, message_text
+    from services.llm_client import agent_kernel, chat_completion, message_text
     from services.state_store import get_all_settings
 except ModuleNotFoundError:  # Package import used by tests and library consumers.
     from backend.config import CLAUDE_BIN, SKILLS_DIR
-    from backend.services.llm_client import chat_completion, message_text
+    from backend.services.llm_client import agent_kernel, chat_completion, message_text
     from backend.services.state_store import get_all_settings
 
 log = logging.getLogger(__name__)
@@ -27,6 +27,8 @@ log = logging.getLogger(__name__)
 OutputCallback = Callable[[str], Awaitable[None] | None]
 MAX_TOOL_OUTPUT = 60_000
 MAX_FILE_READ = 100_000
+CLAUDE_EFFORTS = ("low", "medium", "high", "xhigh", "max")
+_VERSION_RE = re.compile(r"\b(\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.-]+)?)\b")
 
 
 AGENT_TOOLS: list[dict[str, Any]] = [
@@ -341,34 +343,309 @@ class ClaudeRunner:
         return f"Unsupported tool: {name}"
 
     @staticmethod
-    def _resolve_claude_executable(configured: str) -> Path | None:
-        values = [configured, str(CLAUDE_BIN), "claude"]
-        for value in values:
-            raw = (value or "").strip().strip('"')
-            if not raw:
-                continue
-            supplied = Path(raw).expanduser()
-            candidate = supplied if supplied.is_file() else None
-            if candidate is None:
-                discovered = shutil.which(raw)
-                if discovered:
-                    candidate = Path(discovered)
-            if candidate is None or not candidate.is_file():
-                continue
-            if candidate.suffix.lower() in {".cmd", ".bat"}:
-                native = (
-                    candidate.parent
-                    / "node_modules"
-                    / "@anthropic-ai"
-                    / "claude-code"
-                    / "bin"
-                    / "claude.exe"
-                )
-                if native.is_file():
-                    candidate = native
-            if candidate.suffix.lower() not in {".cmd", ".bat"}:
-                return candidate.resolve()
+    def _resolve_claude_candidate(value: str) -> Path | None:
+        raw = (value or "").strip().strip('"')
+        if not raw:
+            return None
+        supplied = Path(raw).expanduser()
+        candidate = supplied if supplied.is_file() else None
+        if candidate is None:
+            discovered = shutil.which(raw)
+            if discovered:
+                candidate = Path(discovered)
+        if candidate is None or not candidate.is_file():
+            return None
+        if candidate.suffix.lower() in {".cmd", ".bat", ".ps1"}:
+            native = (
+                candidate.parent
+                / "node_modules"
+                / "@anthropic-ai"
+                / "claude-code"
+                / "bin"
+                / "claude.exe"
+            )
+            if native.is_file():
+                candidate = native
+        if candidate.suffix.lower() in {".cmd", ".bat", ".ps1"}:
+            return None
+        return candidate.resolve()
+
+    @classmethod
+    def _resolve_claude_executable(cls, configured: str) -> Path | None:
+        for value in (configured, str(CLAUDE_BIN), "claude"):
+            candidate = cls._resolve_claude_candidate(value)
+            if candidate is not None:
+                return candidate
         return None
+
+    @classmethod
+    async def _compatible_claude_executable(
+        cls, settings: dict[str, str]
+    ) -> tuple[Path, dict[str, Any]]:
+        detection = await cls.detect_local_claude(settings)
+        recommended = detection.get("recommended")
+        if not recommended:
+            raise FileNotFoundError(
+                detection.get("message")
+                or "Local Claude Code was selected but no compatible executable was found"
+            )
+        selected = next(
+            (
+                item
+                for item in detection.get("candidates", [])
+                if item.get("path") == recommended and item.get("compatible")
+            ),
+            None,
+        )
+        if selected is None:
+            raise RuntimeError("Claude detection returned an invalid recommended candidate")
+        return Path(recommended), selected
+
+    @staticmethod
+    async def _claude_probe(path: Path, argument: str) -> tuple[int | None, str]:
+        try:
+            process = await asyncio.create_subprocess_exec(
+                str(path),
+                argument,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.STDOUT,
+            )
+            output, _ = await asyncio.wait_for(process.communicate(), timeout=5)
+            return process.returncode, output.decode("utf-8", errors="replace")[:60_000]
+        except (OSError, asyncio.TimeoutError) as exc:
+            if "process" in locals() and process.returncode is None:
+                process.terminate()
+                try:
+                    await asyncio.wait_for(process.wait(), timeout=1)
+                except (OSError, asyncio.TimeoutError):
+                    process.kill()
+            return None, f"{type(exc).__name__}: {exc}"
+
+    @classmethod
+    async def inspect_claude_executable(
+        cls, path: Path, *, sources: list[str] | None = None
+    ) -> dict[str, Any]:
+        """Probe the CLI contract used by the local Agent runtime."""
+        version_code, version_output = await cls._claude_probe(path, "--version")
+        help_code, help_output = await cls._claude_probe(path, "--help")
+        lowered = help_output.lower()
+        capabilities = {
+            "print_mode": "--print" in lowered,
+            "stream_json": "stream-json" in lowered,
+            "partial_messages": "--include-partial-messages" in lowered,
+            "permission_mode": "--permission-mode" in lowered,
+            "allowed_tools": "--allowedtools" in lowered
+            or "--allowed-tools" in lowered,
+            "model": "--model" in lowered,
+            "resume": "--resume" in lowered,
+            "effort": "--effort" in lowered,
+            "effort_values": [value for value in CLAUDE_EFFORTS if value in lowered],
+        }
+        required = (
+            "print_mode",
+            "stream_json",
+            "partial_messages",
+            "permission_mode",
+            "allowed_tools",
+        )
+        issues: list[str] = []
+        if version_code != 0:
+            issues.append("--version probe failed")
+        if help_code != 0:
+            issues.append("--help probe failed")
+        missing = [name for name in required if not capabilities[name]]
+        if missing:
+            issues.append("missing required CLI options: " + ", ".join(missing))
+        compatible = not issues
+        version_match = _VERSION_RE.search(version_output)
+        return {
+            "path": str(path),
+            "sources": sources or [],
+            "version": version_match.group(1) if version_match else None,
+            "version_output": version_output.strip()[:200],
+            "compatible": compatible,
+            "status": "compatible" if compatible else "incompatible",
+            "capabilities": capabilities,
+            "issues": issues,
+        }
+
+    @classmethod
+    async def detect_local_claude(
+        cls, settings: dict[str, str]
+    ) -> dict[str, Any]:
+        source_values = (
+            ("configured", settings.get("claude_bin", "claude")),
+            ("bundled", str(CLAUDE_BIN)),
+            ("path", "claude"),
+        )
+        paths: dict[str, dict[str, Any]] = {}
+        for source, value in source_values:
+            candidate = cls._resolve_claude_candidate(value)
+            if candidate is None:
+                continue
+            key = str(candidate).casefold()
+            if key not in paths:
+                paths[key] = {"path": candidate, "sources": []}
+            paths[key]["sources"].append(source)
+        details = []
+        for item in paths.values():
+            try:
+                details.append(
+                    await cls.inspect_claude_executable(
+                        item["path"], sources=item["sources"]
+                    )
+                )
+            except Exception as exc:
+                details.append(
+                    {
+                        "path": str(item["path"]),
+                        "sources": item["sources"],
+                        "version": None,
+                        "version_output": "",
+                        "compatible": False,
+                        "status": "probe_failed",
+                        "capabilities": {
+                            "print_mode": False,
+                            "stream_json": False,
+                            "partial_messages": False,
+                            "permission_mode": False,
+                            "allowed_tools": False,
+                            "model": False,
+                            "resume": False,
+                            "effort": False,
+                            "effort_values": [],
+                        },
+                        "issues": [f"{type(exc).__name__}: {exc}"],
+                    }
+                )
+        compatible = [item for item in details if item["compatible"]]
+        selected_by_agent = {
+            agent: agent_kernel(settings, agent)
+            for agent in ("executor", "reviewer", "editor_ai")
+        }
+        selected_runtime = settings.get("agent_runtime", "openai_compatible")
+        return {
+            "recommended": compatible[0]["path"] if compatible else None,
+            "candidates": details,
+            "required": any(value == "local_claude" for value in selected_by_agent.values()),
+            "selected_runtime": selected_runtime,
+            "selected_by_agent": selected_by_agent,
+            "compatible": bool(compatible),
+            "status": (
+                "compatible"
+                if compatible
+                else "incompatible"
+                if details
+                else "not_found"
+            ),
+            "message": (
+                "Local Claude Code is compatible."
+                if compatible
+                else "Claude Code was found but does not expose the required CLI options."
+                if details
+                else "No local or bundled Claude Code executable was detected."
+            ),
+        }
+
+    @staticmethod
+    def _local_claude_options(
+        settings: dict[str, str], agent: str = "executor"
+    ) -> dict[str, str]:
+        """Resolve role-specific Claude settings with legacy fallbacks."""
+        role_effort = settings.get(f"{agent}_reasoning_effort", "").strip().lower()
+        legacy_effort = settings.get("claude_effort", "default").strip().lower()
+        explicit_role_kernel = bool(settings.get(f"{agent}_agent_runtime", "").strip())
+        effort = (
+            role_effort
+            if role_effort and (role_effort != "default" or explicit_role_kernel)
+            else legacy_effort
+        )
+        if effort not in {"default", "off", *CLAUDE_EFFORTS}:
+            raise ValueError(f"[{agent}] unsupported Claude reasoning effort: {effort}")
+        effective_effort = "default" if effort in {"default", "off"} else effort
+        model = (
+            settings.get(f"{agent}_claude_model")
+            or settings.get("claude_model", "")
+        ).strip()
+        return {
+            "requested_effort": effort,
+            "effective_effort": effective_effort,
+            "model": model,
+        }
+
+    @classmethod
+    async def run_text(
+        cls,
+        agent: str,
+        prompt: str,
+        settings: dict[str, str],
+        *,
+        timeout: float = 300,
+        cwd: str | Path | None = None,
+    ) -> str:
+        """Run a text-only role through the selected local Claude Code CLI."""
+        executable, inspected = await cls._compatible_claude_executable(settings)
+        options = cls._local_claude_options(settings, agent)
+        if (
+            options["effective_effort"] in CLAUDE_EFFORTS
+            and not inspected["capabilities"]["effort"]
+        ):
+            raise RuntimeError(
+                f"[{agent}] local Claude Code does not support --effort; "
+                "choose default effort or upgrade Claude Code"
+            )
+        permission_mode = settings.get("claude_permission_mode", "acceptEdits")
+        if permission_mode not in {"acceptEdits", "auto", "manual"}:
+            permission_mode = "acceptEdits"
+        args = [
+            str(executable),
+            "--print",
+            "--output-format",
+            "json",
+        ]
+        args.extend(["--permission-mode", permission_mode])
+        if options["effective_effort"] in CLAUDE_EFFORTS:
+            args.extend(["--effort", options["effective_effort"]])
+        if options["model"]:
+            args.extend(["--model", options["model"]])
+        env = {key: str(value) for key, value in os.environ.items() if value is not None}
+        env.setdefault("PYTHONUTF8", "1")
+        process = await asyncio.create_subprocess_exec(
+            *args,
+            cwd=str(Path(cwd).resolve()) if cwd is not None else None,
+            env=env,
+            stdin=asyncio.subprocess.PIPE,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+        )
+        try:
+            stdout, stderr = await asyncio.wait_for(
+                process.communicate(prompt.encode("utf-8")), timeout=timeout
+            )
+        except asyncio.TimeoutError as exc:
+            if process.returncode is None:
+                process.terminate()
+                await process.wait()
+            raise RuntimeError(
+                f"[{agent}] local Claude Code timed out after {timeout:g}s"
+            ) from exc
+        output = stdout.decode("utf-8", errors="replace").strip()
+        error = stderr.decode("utf-8", errors="replace").strip()
+        if process.returncode != 0:
+            raise RuntimeError(
+                error[-4000:]
+                or output[-4000:]
+                or f"[{agent}] local Claude Code exited with code {process.returncode}"
+            )
+        try:
+            payload = json.loads(output)
+        except json.JSONDecodeError:
+            return output
+        if isinstance(payload, dict):
+            result = payload.get("result")
+            if isinstance(result, str):
+                return result
+        raise RuntimeError(f"[{agent}] local Claude Code returned no text result")
 
     async def _run_local_claude(
         self,
@@ -385,13 +662,7 @@ class ClaudeRunner:
         inactivity_timeout: int,
         resume_session_id: str | None,
     ) -> dict[str, Any]:
-        executable = self._resolve_claude_executable(
-            settings.get("claude_bin", "claude")
-        )
-        if executable is None:
-            raise FileNotFoundError(
-                "Local Claude Code was selected but no compatible executable was found"
-            )
+        executable, inspected = await self._compatible_claude_executable(settings)
 
         permission_mode = settings.get("claude_permission_mode", "acceptEdits")
         if permission_mode not in {"acceptEdits", "auto", "manual"}:
@@ -403,15 +674,20 @@ class ClaudeRunner:
             "stream-json",
             "--verbose",
             "--include-partial-messages",
-            "--permission-mode",
-            permission_mode,
             "--allowedTools",
             "Read,Write,Edit,Glob,Grep,Bash",
         ]
-        effort = settings.get("claude_effort", "high").strip().lower()
-        if effort in {"low", "medium", "high", "xhigh", "max"}:
+        args.extend(["--permission-mode", permission_mode])
+        local_options = self._local_claude_options(settings, "executor")
+        effort = local_options["effective_effort"]
+        if effort in CLAUDE_EFFORTS and not inspected["capabilities"]["effort"]:
+            raise RuntimeError(
+                "Local Claude Code does not support --effort; "
+                "choose default effort or upgrade Claude Code"
+            )
+        if effort in CLAUDE_EFFORTS:
             args.extend(["--effort", effort])
-        model = settings.get("claude_model", "").strip()
+        model = local_options["model"]
         if model:
             args.extend(["--model", model])
         if resume_session_id:
@@ -532,6 +808,19 @@ class ClaudeRunner:
                 "session_id": session_id,
                 "output_files": self._changed_files(before, self._snapshot_files(root)),
                 "runtime": "local_claude",
+                "model": model or None,
+                "reasoning": {
+                    "requested": local_options["requested_effort"],
+                    "effective": effort,
+                    "control": "effort",
+                    "supported_values": ["default", *CLAUDE_EFFORTS],
+                    "downgraded": local_options["requested_effort"] == "off",
+                    "message": (
+                        "Claude Code does not expose an off value; using its default effort."
+                        if local_options["requested_effort"] == "off"
+                        else None
+                    ),
+                },
             }
         finally:
             if not stderr_task.done():
@@ -589,7 +878,7 @@ class ClaudeRunner:
                 {"role": "user", "content": "\n\n".join(user_parts)},
             ]
             settings = await get_all_settings()
-            if settings.get("agent_runtime", "openai_compatible") == "local_claude":
+            if agent_kernel(settings, "executor") == "local_claude":
                 return await self._run_local_claude(
                     root=root,
                     workflow_id=workflow_id,

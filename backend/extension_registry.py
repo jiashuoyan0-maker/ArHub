@@ -15,6 +15,13 @@ from typing import Any
 SCHEMA_VERSION = "1.0"
 MAX_MANIFEST_BYTES = 256 * 1024
 ID_PATTERN = re.compile(r"^[a-z0-9][a-z0-9._-]{1,63}$")
+PERMISSIONS = {
+    "workspace.read",
+    "workspace.write",
+    "process.execute",
+    "network.access",
+    "preview.render",
+}
 
 
 class ExtensionRegistry:
@@ -178,8 +185,20 @@ class ExtensionRegistry:
             "description": str(manifest.get("description") or "")[:240],
             "license": str(manifest.get("license") or "")[:48],
             "homepage": str(manifest.get("homepage") or "")[:240],
+            "permissions": self._normalize_permissions(
+                manifest.get("permissions") or [], "extension"
+            ),
             "source": source,
         }
+
+    @staticmethod
+    def _normalize_permissions(values: Any, label: str) -> list[str]:
+        if not isinstance(values, list) or not all(isinstance(item, str) for item in values):
+            raise ValueError(f"{label} permissions must be an array of strings")
+        invalid = sorted(set(values) - PERMISSIONS)
+        if invalid:
+            raise ValueError(f"unsupported {label} permissions: {', '.join(invalid)}")
+        return list(dict.fromkeys(values))[:16]
 
     def _normalize_profiles(
         self,
@@ -286,7 +305,11 @@ class ExtensionRegistry:
                     "label": label.strip()[:64],
                     "description": str(value.get("description") or "")[:180],
                     "protocol": str(value.get("protocol") or "manifest-v1")[:32],
+                    "permissions": self._normalize_permissions(
+                        value.get("permissions") or [], "tool adapter"
+                    ),
                     "enabled": False,
+                    "registration": "declarative_only",
                     "source": source,
                 }
             )
@@ -323,6 +346,9 @@ class ExtensionRegistry:
                     "description": str(value.get("description") or "")[:180],
                     "kind": kind,
                     "icon": str(value.get("icon") or "")[:48],
+                    "output_contract": str(
+                        value.get("output_contract") or f"arhub.artifact.{kind}.v1"
+                    )[:64],
                     "source": source,
                 }
             )
@@ -358,6 +384,12 @@ class ExtensionRegistry:
                     "label": label.strip()[:64],
                     "description": str(value.get("description") or "")[:180],
                     "handler": handler[:96],
+                    "permissions": self._normalize_permissions(
+                        value.get("permissions") or [], "action"
+                    ),
+                    "output_contract": str(
+                        value.get("output_contract") or "arhub.artifact-set.v1"
+                    )[:64],
                     "enabled": source == "builtin",
                     "source": source,
                 }

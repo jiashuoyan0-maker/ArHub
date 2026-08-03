@@ -262,18 +262,92 @@ function runtimeField(labelText, control, setting) {
   return field;
 }
 
+function runtimeCardValues(card) {
+  const values = {};
+  card.querySelectorAll("[data-runtime-setting]").forEach((control) => {
+    values[control.dataset.runtimeSetting] = control.value.trim();
+  });
+  return values;
+}
+
 function syncRuntimeCard(card, settings) {
   card.querySelectorAll("[data-runtime-setting]").forEach((control) => {
     const key = control.dataset.runtimeSetting;
     if (key && settings[key] != null) control.value = settings[key];
   });
-  const local = settings.agent_runtime === "local_claude";
-  card.querySelectorAll("[data-runtime-scope='local']").forEach((field) => {
-    field.hidden = !local;
+  const current = { ...settings, ...runtimeCardValues(card) };
+  card.querySelectorAll("[data-runtime-role]").forEach((row) => {
+    const agent = row.dataset.runtimeRole;
+    const runtime =
+      current[`${agent}_agent_runtime`] ||
+      current.agent_runtime ||
+      "openai_compatible";
+    row.dataset.runtimeEffective = runtime;
+    row.querySelectorAll("[data-runtime-scope]").forEach((field) => {
+      const inactive =
+        (field.dataset.runtimeScope === "local" && runtime !== "local_claude") ||
+        (field.dataset.runtimeScope === "open" && runtime === "local_claude");
+      field.dataset.inactive = String(inactive);
+      const control = field.querySelector("input, select");
+      if (control) control.disabled = inactive;
+    });
   });
-  card.querySelectorAll("[data-runtime-scope='open']").forEach((field) => {
-    field.hidden = local;
+}
+
+function runtimeRole(label, agent) {
+  const row = document.createElement("section");
+  row.className = "arhub-runtime-role";
+  row.dataset.runtimeRole = agent;
+  const title = document.createElement("strong");
+  title.className = "arhub-runtime-role-title";
+  title.textContent = label;
+  const controls = document.createElement("div");
+  controls.className = "arhub-runtime-role-controls";
+  const kernel = settingsSelect([
+    ["", "沿用默认内核"],
+    ["openai_compatible", "开放模型"],
+    ["local_claude", "本机 Claude Code"],
+  ]);
+  const provider = settingsSelect([
+    ["auto", "自动识别"],
+    ["deepseek", "DeepSeek"],
+    ["glm", "GLM"],
+    ["openai", "OpenAI"],
+    ["generic", "通用兼容"],
+  ]);
+  const reasoning = settingsSelect([
+    ["default", "模型默认"],
+    ["off", "关闭"],
+    ["low", "低"],
+    ["medium", "中"],
+    ["high", "高"],
+    ["xhigh", "极高"],
+    ["max", "最大"],
+  ]);
+  const claudeModel = document.createElement("input");
+  claudeModel.type = "text";
+  claudeModel.placeholder = "沿用默认 Claude 模型";
+  const kernelField = runtimeField("Agent 内核", kernel, `${agent}_agent_runtime`);
+  const providerField = runtimeField("Provider", provider, `${agent}_provider`);
+  const reasoningField = runtimeField(
+    "思考强度",
+    reasoning,
+    `${agent}_reasoning_effort`,
+  );
+  const modelField = runtimeField(
+    "Claude 模型",
+    claudeModel,
+    `${agent}_claude_model`,
+  );
+  providerField.dataset.runtimeScope = "open";
+  modelField.dataset.runtimeScope = "local";
+  controls.append(kernelField, providerField, reasoningField, modelField);
+  row.append(title, controls);
+  kernel.addEventListener("change", () => {
+    const card = row.closest("#arhub-runtime-settings");
+    if (card) syncRuntimeCard(card, runtimeCardValues(card));
   });
+  return row;
 }
 
 function installRuntimeSettings(main) {
@@ -293,19 +367,18 @@ function installRuntimeSettings(main) {
     heading.append(title);
 
     const grid = document.createElement("div");
-    grid.className = "arhub-runtime-grid";
+    grid.className = "arhub-runtime-global-grid";
     const runtime = settingsSelect([
       ["openai_compatible", "开放模型"],
       ["local_claude", "本机 Claude Code"],
     ]);
-    const provider = settingsSelect([
-      ["auto", "自动识别"],
-      ["deepseek", "DeepSeek"],
-      ["glm", "GLM"],
-      ["openai", "OpenAI"],
-      ["generic", "通用兼容"],
-    ]);
-    const reasoning = settingsSelect([
+    const claudeBin = document.createElement("input");
+    claudeBin.type = "text";
+    claudeBin.placeholder = "claude";
+    const claudeModel = document.createElement("input");
+    claudeModel.type = "text";
+    claudeModel.placeholder = "Claude Code 默认模型";
+    const claudeEffort = settingsSelect([
       ["default", "模型默认"],
       ["off", "关闭"],
       ["low", "低"],
@@ -314,52 +387,23 @@ function installRuntimeSettings(main) {
       ["xhigh", "极高"],
       ["max", "最大"],
     ]);
-    const claudeEffort = reasoning.cloneNode(true);
-    const reviewerReasoning = reasoning.cloneNode(true);
-    const editorReasoning = reasoning.cloneNode(true);
-    const claudeBin = document.createElement("input");
-    claudeBin.type = "text";
-    claudeBin.placeholder = "claude";
-    const claudeModel = document.createElement("input");
-    claudeModel.type = "text";
-    claudeModel.placeholder = "Claude Code 默认模型";
 
-    const runtimeControl = runtimeField("运行方式", runtime, "agent_runtime");
-    const providerControl = runtimeField("Provider", provider, "executor_provider");
-    const reasoningControl = runtimeField(
-      "思考强度",
-      reasoning,
-      "executor_reasoning_effort",
-    );
-    const reviewerControl = runtimeField(
-      "审稿者强度",
-      reviewerReasoning,
-      "reviewer_reasoning_effort",
-    );
-    const editorControl = runtimeField(
-      "编辑器强度",
-      editorReasoning,
-      "editor_ai_reasoning_effort",
-    );
-    providerControl.dataset.runtimeScope = "open";
-    reasoningControl.dataset.runtimeScope = "open";
-    reviewerControl.dataset.runtimeScope = "open";
-    editorControl.dataset.runtimeScope = "open";
+    const runtimeControl = runtimeField("默认 Agent 内核", runtime, "agent_runtime");
     const binControl = runtimeField("Claude Code", claudeBin, "claude_bin");
-    const modelControl = runtimeField("Claude 模型", claudeModel, "claude_model");
-    const effortControl = runtimeField("Claude 强度", claudeEffort, "claude_effort");
-    binControl.dataset.runtimeScope = "local";
-    modelControl.dataset.runtimeScope = "local";
-    effortControl.dataset.runtimeScope = "local";
-    grid.append(
-      runtimeControl,
-      providerControl,
-      reasoningControl,
-      reviewerControl,
-      editorControl,
-      binControl,
-      modelControl,
-      effortControl,
+    const modelControl = runtimeField("默认 Claude 模型", claudeModel, "claude_model");
+    const effortControl = runtimeField(
+      "默认 Claude 强度",
+      claudeEffort,
+      "claude_effort",
+    );
+    grid.append(runtimeControl, binControl, modelControl, effortControl);
+
+    const roles = document.createElement("div");
+    roles.className = "arhub-runtime-roles";
+    roles.append(
+      runtimeRole("执行者 Agent", "executor"),
+      runtimeRole("审稿者 Agent", "reviewer"),
+      runtimeRole("编辑器助手", "editor_ai"),
     );
 
     const actions = document.createElement("div");
@@ -379,22 +423,23 @@ function installRuntimeSettings(main) {
     save.textContent = "保存运行时";
     addLeadingIcon(save, "Save", "arhub-studio-action-icon", 15);
     actions.append(status, detect, save);
-    card.append(heading, grid, actions);
+    card.append(heading, grid, roles, actions);
     host.prepend(card);
 
-    runtime.addEventListener("change", () => {
-      syncRuntimeCard(card, {
-        agent_runtime: runtime.value,
-      });
-    });
+    runtime.addEventListener("change", () =>
+      syncRuntimeCard(card, runtimeCardValues(card)),
+    );
     const detectLocal = async () => {
       status.textContent = "检测中...";
       const response = await fetch("/api/settings/detect-claude", {
         cache: "no-store",
       });
       const payload = response.ok ? await response.json() : null;
+      const recommended = payload?.candidates?.find(
+        (candidate) => candidate.path === payload?.recommended,
+      );
       status.textContent = payload?.compatible
-        ? payload.candidates?.[0]?.version || "本机 Claude Code 可用"
+        ? recommended?.version || "本机 Claude Code 可用"
         : "未检测到本机 Claude Code";
       status.dataset.state = payload?.compatible ? "ready" : "error";
       if (payload?.recommended && !claudeBin.value.trim()) {
@@ -404,11 +449,13 @@ function installRuntimeSettings(main) {
     };
     detect.addEventListener("click", () => void detectLocal());
     save.addEventListener("click", async () => {
-      const values = {};
-      card.querySelectorAll("[data-runtime-setting]").forEach((control) => {
-        values[control.dataset.runtimeSetting] = control.value.trim();
-      });
-      if (values.agent_runtime === "local_claude" && !(await detectLocal())) return;
+      const values = runtimeCardValues(card);
+      const needsLocal = ["executor", "reviewer", "editor_ai"].some(
+        (agent) =>
+          (values[`${agent}_agent_runtime`] || values.agent_runtime) ===
+          "local_claude",
+      );
+      if (needsLocal && !(await detectLocal())) return;
       save.disabled = true;
       try {
         const response = await fetch("/api/settings", {

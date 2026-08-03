@@ -97,12 +97,16 @@ test('release notes are normalized for the renderer', () => {
 test('installer profiles are classified and cannot cross-update', () => {
   const lite = [{ url: 'ArHub-Setup-1.2.0-lite-x64.exe' }];
   const full = [{ url: 'ArHub-Setup-1.2.0-x64.exe' }];
+  const appOnly = [{ url: 'ArHub-Setup-1.2.0-app-only-x64.exe' }];
   assert.equal(classifyInstaller(lite[0].url), 'lite');
   assert.equal(classifyInstaller(full[0].url), 'full');
+  assert.equal(classifyInstaller(appOnly[0].url), 'app-only');
   assert.equal(isRuntimeProfileCompatible(lite, 'lite'), true);
   assert.equal(isRuntimeProfileCompatible(lite, 'full'), false);
   assert.equal(isRuntimeProfileCompatible(full, 'full'), true);
   assert.equal(isRuntimeProfileCompatible(full, 'lite'), false);
+  assert.equal(isRuntimeProfileCompatible(appOnly, 'full'), true);
+  assert.equal(isRuntimeProfileCompatible(appOnly, 'lite'), true);
   assert.equal(isRuntimeProfileCompatible(full, 'unknown'), false);
   assert.equal(isRuntimeProfileCompatible([
     { url: 'ArHub-Setup-1.2.0-lite-x64.exe' },

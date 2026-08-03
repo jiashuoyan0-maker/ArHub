@@ -29,6 +29,97 @@ class StepStatus(str, Enum):
     CANCELLED = "cancelled"
 
 
+class AgentKernel(str, Enum):
+    """Execution kernel selected independently from a model provider."""
+
+    OPENAI_COMPATIBLE = "openai_compatible"
+    LOCAL_CLAUDE = "local_claude"
+
+
+class ReasoningResolutionInfo(BaseModel):
+    """Requested and effective reasoning controls for one model request."""
+
+    requested: str
+    effective: str
+    control: str
+    supported_values: list[str] = Field(default_factory=list)
+    downgraded: bool = False
+    message: str | None = None
+    applied_options: dict[str, Any] = Field(default_factory=dict)
+
+
+class ClaudeCapabilitiesInfo(BaseModel):
+    print_mode: bool = False
+    stream_json: bool = False
+    partial_messages: bool = False
+    permission_mode: bool = False
+    allowed_tools: bool = False
+    model: bool = False
+    resume: bool = False
+    effort: bool = False
+    effort_values: list[str] = Field(default_factory=list)
+
+
+class ClaudeCandidateInfo(BaseModel):
+    path: str
+    sources: list[str] = Field(default_factory=list)
+    version: str | None = None
+    version_output: str = ""
+    compatible: bool = False
+    status: str
+    capabilities: ClaudeCapabilitiesInfo = Field(default_factory=ClaudeCapabilitiesInfo)
+    issues: list[str] = Field(default_factory=list)
+
+
+class ClaudeDetectionInfo(BaseModel):
+    recommended: str | None = None
+    candidates: list[ClaudeCandidateInfo] = Field(default_factory=list)
+    required: bool = False
+    selected_runtime: AgentKernel = AgentKernel.OPENAI_COMPATIBLE
+    selected_by_agent: dict[str, AgentKernel] = Field(default_factory=dict)
+    compatible: bool = False
+    status: str
+    message: str
+
+
+class AgentConfigurationInfo(BaseModel):
+    configured: bool
+    kernel: AgentKernel
+    provider: str | None = None
+    model_id: str = ""
+    reasoning_control: str | None = None
+    reasoning_effort: str | None = None
+    reasoning: ReasoningResolutionInfo | None = None
+    message: str | None = None
+
+
+class AgentCapabilitiesInfo(BaseModel):
+    agents: dict[str, AgentConfigurationInfo] = Field(default_factory=dict)
+    kernels: dict[str, Any] = Field(default_factory=dict)
+
+
+class AgentEventType(str, Enum):
+    STARTED = "agent.started"
+    TEXT_DELTA = "agent.text_delta"
+    ACTIVITY = "agent.activity"
+    TOOL = "agent.tool"
+    COMPLETED = "agent.completed"
+    STOPPED = "agent.stopped"
+    ERROR = "agent.error"
+
+
+class AgentEvent(BaseModel):
+    """Versioned event envelope shared by streamed and polled Agent clients."""
+
+    protocol: str = "arhub.agent.v1"
+    event: AgentEventType
+    type: str
+    run_id: str
+    sequence: int = Field(ge=1)
+    timestamp: str
+    data: dict[str, Any] = Field(default_factory=dict)
+
+
 class TemplateType(str, Enum):
     IDEA_DISCOVERY = "idea_discovery"
     EXPERIMENT_BRIDGE = "experiment_bridge"

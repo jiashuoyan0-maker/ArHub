@@ -4,6 +4,18 @@ html.mw-editor-active {
   --mw-agent-width: 460px;
   --mw-agent-bottom-height: 360px;
   --mw-profile-accent: #0a84ff;
+  --mw-control-size: 44px;
+  --mw-radius-control: 8px;
+  --mw-radius-panel: 8px;
+  --mw-shadow-raised: 0 14px 38px rgba(29, 29, 31, 0.16);
+  --mw-motion-fast: 150ms;
+  --mw-motion-normal: 220ms;
+  --mw-ease: cubic-bezier(0.25, 0.1, 0.25, 1);
+}
+
+html[data-theme="dark"].mw-editor-active,
+html.dark.mw-editor-active {
+  --mw-shadow-raised: 0 16px 42px rgba(0, 0, 0, 0.34);
 }
 
 html.mw-editor-active main.max-w-7xl {
@@ -233,6 +245,15 @@ html.mw-editor-active .nav-bar > div {
   font: 600 14px/1 inherit;
   cursor: pointer;
   transition: color 140ms ease, background-color 140ms ease, border-color 140ms ease, transform 120ms ease;
+}
+
+.mw-workspace-controls .mw-icon-button,
+.mw-extension-drawer header .mw-icon-button {
+  width: var(--mw-control-size);
+  min-width: var(--mw-control-size);
+  height: var(--mw-control-size);
+  min-height: var(--mw-control-size);
+  border-radius: var(--mw-radius-control);
 }
 
 .mw-icon-button:hover {
@@ -896,7 +917,7 @@ html.mw-editor-active .nav-bar > div {
 .mw-runtime-select,
 .mw-effort-select {
   min-width: 0;
-  height: 26px;
+  min-height: 32px;
   padding: 0 22px 0 7px;
   color: var(--text-secondary);
   border: 0;
@@ -906,6 +927,12 @@ html.mw-editor-active .nav-bar > div {
   background-color: transparent;
   font: inherit;
   cursor: pointer;
+}
+
+.mw-runtime-select option,
+.mw-effort-select option {
+  color: var(--text-primary);
+  background: var(--apple-surface-solid);
 }
 
 .mw-runtime-select {
@@ -1078,8 +1105,10 @@ html.mw-editor-active .nav-bar > div {
   width: min(460px, calc(100vw - 24px));
   height: 100%;
   border-left: 1px solid var(--apple-glass-border);
-  background: var(--apple-surface-solid);
-  box-shadow: -22px 0 70px rgba(0, 0, 0, 0.24);
+  background: color-mix(in srgb, var(--apple-surface-strong) 94%, transparent);
+  box-shadow: var(--mw-shadow-raised);
+  backdrop-filter: saturate(170%) blur(30px);
+  -webkit-backdrop-filter: saturate(170%) blur(30px);
 }
 
 .mw-extension-drawer > header {
@@ -1190,6 +1219,18 @@ html.mw-editor-active .nav-bar > div {
   color: var(--text-muted);
   background: var(--apple-fill);
   font-size: 9px;
+}
+
+.mw-extension-chip[data-tone="allowed"] {
+  color: #248a3d;
+  border-color: color-mix(in srgb, #34c759 34%, var(--apple-separator));
+  background: color-mix(in srgb, #34c759 12%, var(--apple-fill));
+}
+
+.mw-extension-chip[data-tone="blocked"] {
+  color: #c9342f;
+  border-color: color-mix(in srgb, #ff453a 34%, var(--apple-separator));
+  background: color-mix(in srgb, #ff453a 11%, var(--apple-fill));
 }
 
 .mw-extension-empty {

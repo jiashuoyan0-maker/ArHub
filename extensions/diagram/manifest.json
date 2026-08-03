@@ -5,6 +5,7 @@
   "version": "0.1.0",
   "description": "Create editable Mermaid flowcharts and a local SVG preview inside the workspace.",
   "license": "MIT",
+  "permissions": ["workspace.read", "workspace.write", "preview.render"],
   "contributes": {
     "commands": [
       {
@@ -20,7 +21,8 @@
         "label": "流程图画布",
         "description": "查看 Mermaid 源文件与本地 SVG 预览。",
         "kind": "diagram",
-        "icon": "Workflow"
+        "icon": "Workflow",
+        "output_contract": "arhub.artifact.diagram.v1"
       }
     ],
     "actions": [
@@ -28,7 +30,9 @@
         "id": "create",
         "label": "新建流程图",
         "description": "在当前工作区创建 Mermaid 源文件和 SVG 预览。",
-        "handler": "builtin.diagram.create"
+        "handler": "builtin.diagram.create",
+        "permissions": ["workspace.write", "preview.render"],
+        "output_contract": "arhub.artifact-set.v1"
       }
     ],
     "tool_adapters": []

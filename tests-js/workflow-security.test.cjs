@@ -132,6 +132,37 @@ test('automatic Lite publishing only trusts successful main pushes from this rep
   assert.doesNotMatch(workflow, /scripts\/assert-runtime\.ps1/);
 });
 
+test('app-only candidates are isolated from Full builds and runtime inputs', () => {
+  const workflow = fs.readFileSync(path.join(workflowDir, 'auto-app-only-candidate.yml'), 'utf8');
+  assert.match(workflow, /workflow_run\.event == 'push'/);
+  assert.match(workflow, /workflow_run\.head_branch == 'main'/);
+  assert.match(workflow, /workflow_run\.head_repository\.full_name == github\.repository/);
+  assert.match(workflow, /workflow_run\.head_sha.*git rev-parse HEAD/s);
+  assert.match(workflow, /inputs\.publish == true/);
+  assert.match(workflow, /source_sha:/);
+  assert.match(workflow, /merge-base --is-ancestor \$expected origin\/main/);
+  assert.doesNotMatch(workflow, /workflow_run\.head_sha \|\| github\.sha/);
+  assert.match(workflow, /-RuntimeProfile app-only\b/);
+  assert.match(workflow, /-SkipTests\b/);
+  assert.match(workflow, /unexpected installer profile/);
+  assert.match(workflow, /forbidden Full\/Lite runtime assets/);
+  assert.doesNotMatch(workflow, /RuntimeProfile (?:full|lite)|ARHUB_RUNTIME_DIR|assert-runtime\.ps1/);
+  assert.doesNotMatch(workflow, /git push origin/);
+
+  const packageMetadata = JSON.parse(
+    fs.readFileSync(path.join(__dirname, '..', 'package.json'), 'utf8'),
+  );
+  assert.match(packageMetadata.scripts['package:win:app-only'], /-RuntimeProfile app-only\b/);
+
+  const buildScript = fs.readFileSync(
+    path.join(__dirname, '..', 'scripts', 'build-windows.ps1'),
+    'utf8',
+  );
+  assert.match(buildScript, /ValidateSet\('full', 'lite', 'app-only'\)/);
+  assert.match(buildScript, /if \(-not \$isAppOnly\)/);
+  assert.match(buildScript, /unexpectedly contains a runtime directory/);
+});
+
 test('maintenance runs under PowerShell 7 and uses exact-title issue synchronization', () => {
   const maintenance = fs.readFileSync(path.join(workflowDir, 'maintenance.yml'), 'utf8');
   const issueSync = fs.readFileSync(

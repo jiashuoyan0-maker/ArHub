@@ -14,9 +14,11 @@ from typing import Any
 
 try:
     from config import APPDATA_DIR
+    from models.schemas import AgentEvent, AgentEventType
     from services.claude_runner import ClaudeRunner, claude_runner
 except ModuleNotFoundError:  # Package import used by tests and library consumers.
     from backend.config import APPDATA_DIR
+    from backend.models.schemas import AgentEvent, AgentEventType
     from backend.services.claude_runner import ClaudeRunner, claude_runner
 
 
@@ -133,6 +135,7 @@ class AgentRun:
     diffs: list[dict[str, Any]] = field(default_factory=list)
     result: dict[str, Any] = field(default_factory=dict)
     running: bool = True
+    sequence: int = 0
     queue: asyncio.Queue[dict[str, Any] | None] = field(default_factory=asyncio.Queue)
     task: asyncio.Task[None] | None = None
 
@@ -186,6 +189,47 @@ class EditorAgentManager:
 
     def _save_result(self, workflow_id: str, result: dict[str, Any]) -> None:
         _atomic_json(self._result_path(workflow_id), result)
+
+    @staticmethod
+    async def _emit_event(
+        run: AgentRun, event_type: AgentEventType, **data: Any
+    ) -> None:
+        legacy_types = {
+            AgentEventType.STARTED: "progress",
+            AgentEventType.TEXT_DELTA: "progress",
+            AgentEventType.ACTIVITY: "log",
+            AgentEventType.TOOL: "log",
+            AgentEventType.COMPLETED: "result",
+            AgentEventType.STOPPED: "result",
+            AgentEventType.ERROR: "error",
+        }
+        run.sequence += 1
+        event = AgentEvent(
+            event=event_type,
+            type=legacy_types[event_type],
+            run_id=run.runner_id,
+            sequence=run.sequence,
+            timestamp=_utc_now(),
+            data=data,
+        )
+        payload = event.model_dump(mode="json")
+        # Transitional aliases keep the recovered React bundle operational while
+        # new clients consume the versioned event/data envelope.
+        if event_type == AgentEventType.TEXT_DELTA:
+            payload.update(message=data.get("text", ""), streaming=True)
+        elif event_type in {
+            AgentEventType.STARTED,
+            AgentEventType.ACTIVITY,
+            AgentEventType.TOOL,
+        }:
+            payload["message"] = data.get("message", "")
+        elif event_type in {
+            AgentEventType.COMPLETED,
+            AgentEventType.STOPPED,
+            AgentEventType.ERROR,
+        }:
+            payload.update(data)
+        await run.queue.put(payload)
 
     def _apply(
         self,
@@ -263,7 +307,12 @@ class EditorAgentManager:
                 "started_at": _utc_now(),
             },
         )
-        await run.queue.put({"type": "progress", "message": "Agent 已启动"})
+        await self._emit_event(
+            run,
+            AgentEventType.STARTED,
+            message="Agent 已启动",
+            workflow_id=workflow_id,
+        )
         run.task = asyncio.create_task(
             self._execute(run, message, mode, current_file, compile_log),
             name=f"editor-agent:{workflow_id}",
@@ -287,7 +336,11 @@ class EditorAgentManager:
                 run.logs.append(line[-4000:])
                 if len(run.logs) > MAX_LOG_LINES:
                     del run.logs[: len(run.logs) - MAX_LOG_LINES]
-                await run.queue.put({"type": "log", "message": line[-4000:]})
+                event_type = (
+                    AgentEventType.TOOL if line.lstrip().startswith("[tool]")
+                    else AgentEventType.ACTIVITY
+                )
+                await self._emit_event(run, event_type, message=line[-4000:])
 
         async def on_delta(delta: str) -> None:
             nonlocal last_stream_emit, last_stream_snapshot
@@ -299,12 +352,11 @@ class EditorAgentManager:
                 return
             last_stream_emit = now
             last_stream_snapshot = run.stream_text
-            await run.queue.put(
-                {
-                    "type": "progress",
-                    "message": run.stream_text,
-                    "streaming": True,
-                }
+            await self._emit_event(
+                run,
+                AgentEventType.TEXT_DELTA,
+                delta=delta,
+                text=run.stream_text,
             )
 
         context = (
@@ -326,12 +378,11 @@ class EditorAgentManager:
                 workspace_files=sorted(_workspace_files(run.sandbox)),
             )
             if run.stream_text and last_stream_snapshot != run.stream_text:
-                await run.queue.put(
-                    {
-                        "type": "progress",
-                        "message": run.stream_text,
-                        "streaming": True,
-                    }
+                await self._emit_event(
+                    run,
+                    AgentEventType.TEXT_DELTA,
+                    delta=run.stream_text[len(last_stream_snapshot) :],
+                    text=run.stream_text,
                 )
             run.diffs = build_diffs(run.workspace, run.sandbox)
             success = bool(runner_result.get("success"))
@@ -361,7 +412,11 @@ class EditorAgentManager:
                 "success": success,
             }
             self.append_history(run.workflow_id, "ai", summary)
-            await run.queue.put(run.result)
+            await self._emit_event(
+                run,
+                AgentEventType.COMPLETED,
+                **run.result,
+            )
         except asyncio.CancelledError:
             run.diffs = build_diffs(run.workspace, run.sandbox)
             run.result = {
@@ -376,7 +431,7 @@ class EditorAgentManager:
                 "cancelled": True,
             }
             self.append_history(run.workflow_id, "system", run.result["summary"])
-            await run.queue.put(run.result)
+            await self._emit_event(run, AgentEventType.STOPPED, **run.result)
         except Exception as exc:
             run.diffs = build_diffs(run.workspace, run.sandbox)
             message_text = f"Agent failed: {type(exc).__name__}: {exc}"
@@ -392,7 +447,7 @@ class EditorAgentManager:
                 "success": False,
             }
             self.append_history(run.workflow_id, "system", message_text)
-            await run.queue.put(run.result)
+            await self._emit_event(run, AgentEventType.ERROR, **run.result)
         finally:
             run.running = False
             persisted = {**run.result, "running": False, "finished_at": _utc_now()}

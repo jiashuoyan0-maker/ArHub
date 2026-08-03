@@ -108,6 +108,7 @@ def _create_diagram(workspace: Path, workflow_id: str, request: ExtensionActionR
     source_path.write_text(_diagram_source(title, description), encoding="utf-8")
     preview_path.write_text(_diagram_svg(title, description), encoding="utf-8")
     return {
+        "protocol": "arhub.artifact-set.v1",
         "extension_id": "arhub.diagram",
         "action": "create",
         "artifacts": [
@@ -118,6 +119,7 @@ def _create_diagram(workspace: Path, workflow_id: str, request: ExtensionActionR
             f"/api/workflows/{workflow_id}/extensions/arhub.diagram/preview/"
             f"{quote(preview_path.relative_to(workspace).as_posix(), safe='/')}"
         ),
+        "primary_artifact": preview_path.relative_to(workspace).as_posix(),
     }
 
 
@@ -157,6 +159,7 @@ def _create_web_project(workspace: Path, workflow_id: str, request: ExtensionAct
     )
     index_path = project_dir / "index.html"
     return {
+        "protocol": "arhub.artifact-set.v1",
         "extension_id": "arhub.web",
         "action": "create",
         "artifacts": [
@@ -168,6 +171,7 @@ def _create_web_project(workspace: Path, workflow_id: str, request: ExtensionAct
             f"/api/workflows/{workflow_id}/extensions/arhub.web/preview/"
             f"{quote(index_path.relative_to(workspace).as_posix(), safe='/')}"
         ),
+        "primary_artifact": index_path.relative_to(workspace).as_posix(),
     }
 
 

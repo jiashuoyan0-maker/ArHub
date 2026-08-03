@@ -1,6 +1,7 @@
 const fs = require('fs');
 const path = require('path');
 const packageMetadata = require('./package.json');
+const runtimeManifest = require('./packaging/runtime-manifest.json');
 const { getSigningSuffixes } = require('./packaging/signing-policy.cjs');
 
 const projectDir = __dirname;
@@ -12,11 +13,13 @@ const publisherName = String(process.env.ARHUB_PUBLISHER_NAME || '').trim();
 const signingProvider = String(process.env.ARHUB_SIGNING_PROVIDER || 'pfx').toLowerCase();
 const artifactSuffix = process.env.ARHUB_ARTIFACT_SUFFIX || '';
 const runtimeProfile = String(process.env.ARHUB_RUNTIME_PROFILE || 'full').toLowerCase();
-if (!['full', 'lite'].includes(runtimeProfile)) {
+if (!['full', 'lite', 'app-only'].includes(runtimeProfile)) {
   throw new Error(`Unsupported ARHUB_RUNTIME_PROFILE: ${runtimeProfile}`);
 }
-const profileSuffix = runtimeProfile === 'lite' ? '-lite' : '';
-const signingSuffixes = getSigningSuffixes(packageMetadata.version, artifactSuffix);
+const profileSuffix = runtimeProfile === 'full' ? '' : `-${runtimeProfile}`;
+const includesRuntime = runtimeProfile !== 'app-only';
+const installedRuntimeProfile = includesRuntime ? runtimeProfile : 'external';
+const signingSuffixes = getSigningSuffixes(packageMetadata.version, artifactSuffix, 'x64', profileSuffix);
 
 const liteExcludedComponents = ['node', 'git', 'pandoc', 'draw.io', 'texlive'];
 const liteExcludedPythonPackages = [
@@ -51,7 +54,7 @@ if (runtimeProfile === 'lite') {
   }
 }
 
-if (!fs.existsSync(runtimeDir)) {
+if (includesRuntime && !fs.existsSync(runtimeDir)) {
   throw new Error(`Full runtime was not found: ${runtimeDir}`);
 }
 if (requireSigning && !publisherName) {
@@ -100,7 +103,15 @@ module.exports = {
   npmRebuild: false,
   forceCodeSigning: requireSigning,
   extraMetadata: {
-    arhubRuntimeProfile: runtimeProfile,
+    arhubPackageProfile: runtimeProfile,
+    arhubRuntimeProfile: installedRuntimeProfile,
+    arhubRuntimeVersion: runtimeManifest.runtimeVersion,
+    arhubRuntimeCompatibility: {
+      schemaVersion: 1,
+      runtimeVersion: runtimeManifest.runtimeVersion,
+      profiles: runtimeProfile === 'app-only' ? ['full', 'lite'] : [runtimeProfile],
+      requiresExternalRuntime: !includesRuntime,
+    },
   },
   directories: {
     output: 'release',
@@ -110,8 +121,14 @@ module.exports = {
     'main.js',
     'preload.js',
     'updater.js',
+    'runtime-store.js',
+    'update-health.js',
+    'scripts/verify-capabilities.cjs',
     'updater-config.json',
     'package.json',
+    'packaging/runtime-bundle.json',
+    'packaging/runtime-lock.json',
+    'packaging/runtime-manifest.json',
     'extension.schema.json',
     'LICENSE',
     'THIRD_PARTY_NOTICES.md',
@@ -130,13 +147,13 @@ module.exports = {
     '!dist/assets/KaTeX_*.ttf',
     '!dist/assets/KaTeX_*.woff',
   ],
-  extraFiles: [
+  extraFiles: includesRuntime ? [
     {
       from: runtimeDir,
       to: 'runtime',
       filter: runtimeFilter,
     },
-  ],
+  ] : [],
   win,
   nsis: {
     oneClick: false,

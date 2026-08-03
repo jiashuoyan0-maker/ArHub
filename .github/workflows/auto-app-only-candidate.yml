@@ -1,0 +1,140 @@
+name: Auto App-only Candidate
+
+on:
+  workflow_run:
+    workflows: [Quality]
+    types: [completed]
+    branches: [main]
+  # Manual publishing requires an explicit confirmation input below.
+  workflow_dispatch:
+    inputs:
+      source_sha:
+        description: Exact main-branch commit to package
+        required: true
+        type: string
+      publish:
+        description: Publish the app-only candidate prerelease
+        required: true
+        type: boolean
+        default: false
+
+concurrency:
+  group: auto-app-only-candidate
+  cancel-in-progress: true
+
+permissions:
+  contents: write
+  id-token: write
+  attestations: write
+
+jobs:
+  build-candidate:
+    if: >-
+      (github.event_name == 'workflow_dispatch' && inputs.publish == true) ||
+      (github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.event == 'push' &&
+      github.event.workflow_run.head_branch == 'main' &&
+      github.event.workflow_run.head_repository.full_name == github.repository)
+    runs-on: [self-hosted, Windows, X64, arhub-release]
+    timeout-minutes: 90
+    env:
+      GH_TOKEN: ${{ github.token }}
+
+    steps:
+      - name: Check out verified source
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha || inputs.source_sha }}
+          fetch-depth: 0
+
+      - name: Verify checked out source
+        shell: powershell
+        run: |
+          $expected = if ('${{ github.event_name }}' -eq 'workflow_run') {
+            '${{ github.event.workflow_run.head_sha }}'
+          } else {
+            '${{ inputs.source_sha }}'
+          }
+          if ($expected -ne (git rev-parse HEAD)) {
+            throw 'Checked out commit does not match the requested source.'
+          }
+          git merge-base --is-ancestor $expected origin/main
+          if ($LASTEXITCODE -ne 0) {
+            throw 'The requested source is not part of origin/main.'
+          }
+
+      - name: Set up Node.js
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: '20'
+          cache: npm
+
+      - name: Prepare isolated app-only version
+        id: version
+        shell: powershell
+        run: |
+          $current = [string](Get-Content package.json -Encoding utf8 | ConvertFrom-Json).version
+          if ($current -notmatch '^(\d+)\.(\d+)\.(\d+)(?:-.+)?$') { throw "Unsupported package version: $current" }
+          $version = '{0}.{1}.{2}-app.{3}.{4}' -f $Matches[1], $Matches[2], ([int]$Matches[3] + 1), '${{ github.run_number }}', '${{ github.run_attempt }}'
+          npm version $version --no-git-tag-version --allow-same-version
+          if ($LASTEXITCODE -ne 0) { throw 'Failed to set candidate version.' }
+          "version=$version" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
+          "tag=v$version" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
+
+      - name: Install packaging dependencies
+        run: npm ci
+
+      - name: Build app-only candidate
+        shell: powershell
+        run: >-
+          powershell -NoProfile -ExecutionPolicy Bypass -File scripts/build-windows.ps1
+          -RuntimeProfile app-only -UnsignedRelease -SkipTests
+
+      - name: Remove unpacked staging files
+        shell: powershell
+        run: Remove-Item -LiteralPath release/win-unpacked -Recurse -Force -ErrorAction SilentlyContinue
+
+      - name: Verify candidate asset allowlist
+        shell: powershell
+        run: |
+          $installers = @(Get-ChildItem release -File -Filter 'ArHub-Setup-*.exe')
+          if ($installers.Count -ne 1 -or $installers[0].Name -notlike 'ArHub-Setup-*-app-only-x64.exe') {
+            throw 'The candidate contains an unexpected installer profile.'
+          }
+          $forbidden = @(Get-ChildItem release -File | Where-Object {
+            $_.Name -like 'ArHub-Setup-*-lite-*' -or
+            ($_.Name -like 'ArHub-Setup-*-x64.exe' -and $_.Name -notlike 'ArHub-Setup-*-app-only-x64.exe') -or
+            $_.Name -eq 'sbom-python.cdx.json'
+          })
+          if ($forbidden.Count -gt 0) {
+            throw "The app-only candidate contains forbidden Full/Lite runtime assets: $($forbidden.Name -join ', ')"
+          }
+
+      - name: Attest candidate assets
+        uses: actions/attest-build-provenance@e8998f949152b193b063cb0ec769d69d929409be # v2
+        with:
+          subject-path: |
+            release/ArHub-Setup-*-app-only-*.exe
+            release/ArHub-Setup-*-app-only-*.exe.blockmap
+            release/latest.yml
+            release/SHA256SUMS.txt
+            release/sbom-node.cdx.json
+
+      - name: Publish prerelease candidate without replacing Stable
+        shell: powershell
+        run: |
+          $files = @(
+            Get-ChildItem release -File | Where-Object {
+              $_.Name -like 'ArHub-Setup-*-app-only-*' -or
+              $_.Name -eq 'latest.yml' -or
+              $_.Name -eq 'SHA256SUMS.txt' -or
+              $_.Name -eq 'sbom-node.cdx.json'
+            } | Select-Object -ExpandProperty FullName
+          )
+          gh release create '${{ steps.version.outputs.tag }}' @files `
+            --repo '${{ github.repository }}' `
+            --target '${{ github.event.workflow_run.head_sha || inputs.source_sha }}' `
+            --prerelease `
+            --generate-notes `
+            --title 'ArHub v${{ steps.version.outputs.version }} app-only candidate'
+          if ($LASTEXITCODE -ne 0) { throw 'Failed to publish the app-only candidate Release.' }

@@ -17,6 +17,7 @@ const DEFAULT_CONFIG = Object.freeze({
 function classifyInstaller(url) {
   const name = String(url || '').split(/[?#]/, 1)[0].replace(/\\/g, '/').split('/').pop() || '';
   if (!/^ArHub-Setup-.*-x64\.exe$/i.test(name)) return null;
+  if (/-app-only-x64\.exe$/i.test(name)) return 'app-only';
   return /-lite-x64\.exe$/i.test(name) ? 'lite' : 'full';
 }
 
@@ -34,8 +35,10 @@ function isRuntimeProfileCompatible(files, runtimeProfile) {
   const profile = normalizeRuntimeProfile(runtimeProfile);
   if (profile === 'unknown') return false;
   const installers = (Array.isArray(files) ? files : []).filter((file) => isInstallerAsset(file && file.url));
-  return installers.length > 0
-    && installers.every((file) => classifyInstaller(file && file.url) === profile);
+  return installers.length > 0 && installers.every((file) => {
+    const installerProfile = classifyInstaller(file && file.url);
+    return installerProfile === profile || installerProfile === 'app-only';
+  });
 }
 
 function normalizeReleaseNotes(releaseNotes) {

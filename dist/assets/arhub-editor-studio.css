@@ -505,11 +505,11 @@ html.arhub-editor-studio-active.mw-editor-active .mw-agent-input {
 
 html.arhub-editor-studio-active.mw-editor-active .mw-composer-row > button,
 html.arhub-editor-studio-active.mw-editor-active .mw-composer-row > button.arhub-studio-icon-control.is-icon-only {
-  flex: 0 0 42px !important;
-  width: 42px !important;
-  min-width: 42px !important;
-  height: 42px !important;
-  min-height: 42px !important;
+  flex: 0 0 44px !important;
+  width: 44px !important;
+  min-width: 44px !important;
+  height: 44px !important;
+  min-height: 44px !important;
   padding: 0 !important;
   border-radius: 12px !important;
 }

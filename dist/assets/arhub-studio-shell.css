@@ -1041,10 +1041,40 @@ html.arhub-studio-shell-active:not(.arhub-editor-studio-active) .arhub-runtime-s
   gap: 20px;
 }
 
-html.arhub-studio-shell-active:not(.arhub-editor-studio-active) .arhub-runtime-grid {
+html.arhub-studio-shell-active:not(.arhub-editor-studio-active) .arhub-runtime-global-grid {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 14px;
+}
+
+html.arhub-studio-shell-active:not(.arhub-editor-studio-active) .arhub-runtime-roles {
+  display: grid;
+  gap: 10px;
+}
+
+html.arhub-studio-shell-active:not(.arhub-editor-studio-active) .arhub-runtime-role {
+  display: grid;
+  gap: 10px;
+  padding: 13px;
+  border: 1px solid var(--as-border);
+  border-radius: 10px;
+  background: rgba(5, 4, 11, 0.24);
+}
+
+html[data-theme="light"].arhub-studio-shell-active:not(.arhub-editor-studio-active) .arhub-runtime-role {
+  background: rgba(255, 255, 255, 0.34);
+}
+
+html.arhub-studio-shell-active:not(.arhub-editor-studio-active) .arhub-runtime-role-title {
+  color: var(--as-text);
+  font-size: 12px;
+  font-weight: 680;
+}
+
+html.arhub-studio-shell-active:not(.arhub-editor-studio-active) .arhub-runtime-role-controls {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
 }
 
 html.arhub-studio-shell-active:not(.arhub-editor-studio-active) .arhub-runtime-field {
@@ -1054,6 +1084,10 @@ html.arhub-studio-shell-active:not(.arhub-editor-studio-active) .arhub-runtime-f
 
 html.arhub-studio-shell-active:not(.arhub-editor-studio-active) .arhub-runtime-field[hidden] {
   display: none !important;
+}
+
+html.arhub-studio-shell-active:not(.arhub-editor-studio-active) .arhub-runtime-field[data-inactive="true"] {
+  opacity: 0.52;
 }
 
 html.arhub-studio-shell-active:not(.arhub-editor-studio-active) .arhub-runtime-field input,
@@ -1115,7 +1149,8 @@ html.arhub-studio-shell-active:not(.arhub-editor-studio-active) .arhub-runtime-s
 }
 
 @media (max-width: 760px) {
-  html.arhub-studio-shell-active:not(.arhub-editor-studio-active) .arhub-runtime-grid {
+  html.arhub-studio-shell-active:not(.arhub-editor-studio-active) .arhub-runtime-global-grid,
+  html.arhub-studio-shell-active:not(.arhub-editor-studio-active) .arhub-runtime-role-controls {
     grid-template-columns: 1fr;
   }
 
@@ -1126,6 +1161,13 @@ html.arhub-studio-shell-active:not(.arhub-editor-studio-active) .arhub-runtime-s
 
   html.arhub-studio-shell-active:not(.arhub-editor-studio-active) .arhub-runtime-status {
     flex-basis: 100%;
+  }
+}
+
+@media (max-width: 1120px) and (min-width: 761px) {
+  html.arhub-studio-shell-active:not(.arhub-editor-studio-active) .arhub-runtime-global-grid,
+  html.arhub-studio-shell-active:not(.arhub-editor-studio-active) .arhub-runtime-role-controls {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
 

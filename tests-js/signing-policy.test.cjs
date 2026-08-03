@@ -15,6 +15,11 @@ test('release artifact names are deterministic', () => {
   assert.equal(getArtifactName('1.0.9', '-unsigned'), 'ArHub-Setup-1.0.9-x64-unsigned.exe');
 });
 
+test('profiled installers remain inside the signing allowlist', () => {
+  assert.ok(getSigningSuffixes('1.2.0', '', 'x64', '-lite').includes('ArHub-Setup-1.2.0-lite-x64.exe'));
+  assert.ok(getSigningSuffixes('1.2.0', '', 'x64', '-app-only').includes('ArHub-Setup-1.2.0-app-only-x64.exe'));
+});
+
 test('signing policy includes only ArHub-owned Windows executables', () => {
   const suffixes = getSigningSuffixes('1.0.9');
   assert.deepEqual(suffixes, [

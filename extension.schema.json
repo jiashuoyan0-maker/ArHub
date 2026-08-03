@@ -13,6 +13,12 @@
     "description": { "type": "string", "maxLength": 240 },
     "license": { "type": "string", "maxLength": 48 },
     "homepage": { "type": "string", "maxLength": 240 },
+    "permissions": {
+      "type": "array",
+      "maxItems": 16,
+      "uniqueItems": true,
+      "items": { "$ref": "#/$defs/permission" }
+    },
     "contributes": {
       "type": "object",
       "additionalProperties": false,
@@ -44,6 +50,15 @@
     "id": {
       "type": "string",
       "pattern": "^[a-z0-9][a-z0-9._-]{1,63}$"
+    },
+    "permission": {
+      "enum": [
+        "workspace.read",
+        "workspace.write",
+        "process.execute",
+        "network.access",
+        "preview.render"
+      ]
     },
     "agent_profile": {
       "type": "object",
@@ -85,7 +100,13 @@
         "id": { "$ref": "#/$defs/id" },
         "label": { "type": "string", "minLength": 1, "maxLength": 64 },
         "description": { "type": "string", "maxLength": 180 },
-        "protocol": { "type": "string", "maxLength": 32 }
+        "protocol": { "type": "string", "maxLength": 32 },
+        "permissions": {
+          "type": "array",
+          "maxItems": 8,
+          "uniqueItems": true,
+          "items": { "$ref": "#/$defs/permission" }
+        }
       }
     },
     "view": {
@@ -97,7 +118,8 @@
         "label": { "type": "string", "minLength": 1, "maxLength": 64 },
         "description": { "type": "string", "maxLength": 180 },
         "kind": { "enum": ["diagram", "web", "document", "data"] },
-        "icon": { "type": "string", "maxLength": 48 }
+        "icon": { "type": "string", "maxLength": 48 },
+        "output_contract": { "type": "string", "maxLength": 64 }
       }
     },
     "action": {
@@ -108,6 +130,13 @@
         "id": { "$ref": "#/$defs/id" },
         "label": { "type": "string", "minLength": 1, "maxLength": 64 },
         "description": { "type": "string", "maxLength": 180 },
+        "permissions": {
+          "type": "array",
+          "maxItems": 8,
+          "uniqueItems": true,
+          "items": { "$ref": "#/$defs/permission" }
+        },
+        "output_contract": { "type": "string", "maxLength": 64 },
         "handler": {
           "type": "string",
           "pattern": "^builtin\\.[a-z0-9._-]+$",

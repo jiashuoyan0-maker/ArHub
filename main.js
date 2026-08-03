@@ -15,6 +15,19 @@ const path = require('path');
 const http = require('http');
 const fs = require('fs');
 const PACKAGE_METADATA = require('./package.json');
+const RUNTIME_LOCK = require('./packaging/runtime-lock.json');
+const {
+  migrateLegacyRuntime,
+  resolveRuntime,
+  runtimeStoreRoot,
+} = require('./runtime-store');
+const {
+  claimRollback,
+  getStartupDecision,
+  markUpdatePending,
+  markVersionHealthy,
+  preserveRollbackInstaller,
+} = require('./update-health');
 
 // 自动更新器
 const { Updater, normalizeRuntimeProfile } = require('./updater');
@@ -23,16 +36,30 @@ const { Updater, normalizeRuntimeProfile } = require('./updater');
 const IS_DEV = !app.isPackaged;
 const IS_SMOKE_TEST = process.argv.includes('--arhub-smoke-test') || process.env.ARHUB_SMOKE_TEST === '1';
 const APP_ROOT = IS_DEV ? __dirname : path.join(process.resourcesPath, 'app');
-const RUNTIME_DIR = IS_DEV
+const LEGACY_RUNTIME_DIR = IS_DEV
   ? path.join(__dirname, 'runtime')
   : path.join(path.dirname(process.resourcesPath), 'runtime');
 // Packaged metadata is part of the signed/hashed application payload. An
 // ambient environment variable must not be able to change update channels.
-const RUNTIME_PROFILE = normalizeRuntimeProfile(
+const PACKAGED_RUNTIME_PROFILE = normalizeRuntimeProfile(
   IS_DEV
     ? process.env.ARHUB_RUNTIME_PROFILE || PACKAGE_METADATA.arhubRuntimeProfile || 'full'
     : PACKAGE_METADATA.arhubRuntimeProfile,
 );
+const LOCAL_APP_DATA = process.env.LOCALAPPDATA || path.join(process.env.USERPROFILE || process.cwd(), 'AppData', 'Local');
+const RUNTIME_STORE_ROOT = runtimeStoreRoot(LOCAL_APP_DATA);
+const RUNTIME_RESOLUTION = resolveRuntime({
+  isDev: IS_DEV,
+  appRoot: __dirname,
+  devRuntimeDir: LEGACY_RUNTIME_DIR,
+  installDir: path.dirname(process.execPath),
+  legacyRuntimeDir: LEGACY_RUNTIME_DIR,
+  localAppData: LOCAL_APP_DATA,
+  profile: PACKAGED_RUNTIME_PROFILE,
+  storeRoot: RUNTIME_STORE_ROOT,
+});
+const RUNTIME_DIR = RUNTIME_RESOLUTION.runtimeDir;
+const RUNTIME_PROFILE = RUNTIME_RESOLUTION.profile;
 
 const PYTHON_EXE = path.join(RUNTIME_DIR, 'python', 'python.exe');
 const BACKEND_DIR = IS_DEV
@@ -44,6 +71,21 @@ const ROAMING_DATA_DIR = process.env.APPDATA || path.join(process.env.USERPROFIL
 const USER_DATA_DIR = path.resolve(process.env.ARHUB_DATA_DIR || path.join(ROAMING_DATA_DIR, 'ArHub'));
 const LOG_DIR = path.join(USER_DATA_DIR, 'logs');
 const MAIN_LOG = path.join(LOG_DIR, 'desktop-main.log');
+const UPDATE_HEALTH_PATH = path.join(USER_DATA_DIR, 'update-health.json');
+const UPDATER_CACHE_ROOT = path.join(LOCAL_APP_DATA, 'arhub-updater');
+const ROLLBACK_ROOT = path.join(LOCAL_APP_DATA, 'ArHub', 'rollback-installers');
+const EXPECTED_RUNTIME_VERSION = String(
+  PACKAGE_METADATA.arhubRuntimeVersion || RUNTIME_LOCK.runtimeVersion || '',
+);
+let RUNTIME_COMPATIBILITY_ERROR = '';
+if (!IS_DEV && PACKAGE_METADATA.arhubRuntimeCompatibility?.requiresExternalRuntime) {
+  const compatibleProfiles = PACKAGE_METADATA.arhubRuntimeCompatibility.profiles || [];
+  if (RUNTIME_RESOLUTION.source !== 'store') {
+    RUNTIME_COMPATIBILITY_ERROR = 'This application update requires a migrated external runtime. Install the bridge release first.';
+  } else if (RUNTIME_RESOLUTION.version !== EXPECTED_RUNTIME_VERSION || !compatibleProfiles.includes(RUNTIME_PROFILE)) {
+    RUNTIME_COMPATIBILITY_ERROR = `Runtime ${RUNTIME_RESOLUTION.version || 'unknown'} (${RUNTIME_PROFILE}) is not compatible with this application update.`;
+  }
+}
 
 function appendMainLog(level, args) {
   try {
@@ -138,6 +180,123 @@ let tray = null;
 let pythonProcess = null;
 let isQuitting = false;
 let actualPort = PORT;  // 实际使用的端口（可能因占用而变）
+
+function findCurrentInstaller(nextVersion) {
+  const updaterRoot = path.join(LOCAL_APP_DATA, 'arhub-updater');
+  const currentInstaller = path.join(updaterRoot, 'installer.exe');
+  const installedVersion = String(app.getVersion() || '');
+  if (fs.existsSync(currentInstaller)) {
+    let fileVersion = '';
+    try { fileVersion = String(app.getFileVersion(currentInstaller) || ''); } catch {}
+    if (!fileVersion || fileVersion === installedVersion) return currentInstaller;
+  }
+  if (!fs.existsSync(updaterRoot)) return '';
+  return fs.readdirSync(updaterRoot, { withFileTypes: true })
+    .filter((entry) => entry.isFile() && /\.exe$/i.test(entry.name) && (!nextVersion || !entry.name.includes(nextVersion)))
+    .map((entry) => path.join(updaterRoot, entry.name))
+    .find((candidate) => {
+      if (!fs.existsSync(candidate)) return false;
+      let fileVersion = '';
+      try { fileVersion = String(app.getFileVersion(candidate) || ''); } catch {}
+      return !fileVersion || fileVersion === installedVersion;
+    }) || '';
+}
+
+function verifyPackagedCapabilities() {
+  if (IS_DEV) return [];
+  try {
+    require('./scripts/verify-capabilities.cjs');
+    return [];
+  } catch (error) {
+    return [String(error && error.message ? error.message : error)];
+  }
+}
+
+function rollbackPendingUpdate(reason) {
+  const rollbackStarted = launchRollbackInstaller(reason);
+  if (!rollbackStarted) return false;
+  isQuitting = true;
+  killBackend();
+  setImmediate(() => app.quit());
+  return true;
+}
+
+function launchRollbackInstaller(reason) {
+  if (IS_DEV) return false;
+  const decision = getStartupDecision(UPDATE_HEALTH_PATH, app.getVersion(), {
+    cacheRoot: UPDATER_CACHE_ROOT,
+    rollbackRoot: ROLLBACK_ROOT,
+    maxRollbackAttempts: 1,
+  });
+  if (decision.action !== 'probe') return false;
+  try {
+    const claimed = claimRollback(UPDATE_HEALTH_PATH, app.getVersion(), {
+      cacheRoot: UPDATER_CACHE_ROOT,
+      rollbackRoot: ROLLBACK_ROOT,
+      maxRollbackAttempts: 1,
+      reason,
+    });
+    if (claimed.action !== 'rollback') return false;
+    console.error(`[UpdateHealth] Startup failed; rolling back after: ${reason}`);
+    spawn(claimed.installerPath, ['/S', '--force-run'], {
+      detached: true,
+      stdio: 'ignore',
+      windowsHide: true,
+    }).unref();
+    return true;
+  } catch (error) {
+    console.error('[UpdateHealth] Rollback launch failed:', error);
+    return false;
+  }
+}
+
+function prepareUpdateInstallation(nextVersion) {
+  if (IS_DEV) return;
+  let effectiveRuntime = RUNTIME_RESOLUTION;
+  if (RUNTIME_RESOLUTION.source === 'legacy') {
+    effectiveRuntime = migrateLegacyRuntime({
+      legacyRuntimeDir: LEGACY_RUNTIME_DIR,
+      localAppData: LOCAL_APP_DATA,
+      profile: RUNTIME_PROFILE,
+      runtimeLock: RUNTIME_LOCK,
+      runtimeVersion: RUNTIME_LOCK.runtimeVersion,
+      storeRoot: RUNTIME_STORE_ROOT,
+    });
+  }
+  if (effectiveRuntime.source !== 'store' || effectiveRuntime.version !== EXPECTED_RUNTIME_VERSION) {
+    throw new Error(`Runtime ${effectiveRuntime.version || 'unknown'} is not ready for an app-only update.`);
+  }
+  const healthDecision = getStartupDecision(UPDATE_HEALTH_PATH, nextVersion, {
+    cacheRoot: UPDATER_CACHE_ROOT,
+    rollbackRoot: ROLLBACK_ROOT,
+    maxRollbackAttempts: 1,
+  });
+  let rollback = null;
+  if (healthDecision.action !== 'probe') {
+    const currentInstaller = findCurrentInstaller(nextVersion);
+    if (!currentInstaller) {
+      throw new Error('The verified current installer is unavailable; refusing an update without rollback protection.');
+    }
+    rollback = preserveRollbackInstaller({
+      sourceInstaller: currentInstaller,
+      cacheRoot: UPDATER_CACHE_ROOT,
+      rollbackRoot: ROLLBACK_ROOT,
+      currentVersion: app.getVersion(),
+    });
+  }
+  markUpdatePending(UPDATE_HEALTH_PATH, {
+    currentVersion: app.getVersion(),
+    nextVersion,
+    ...(rollback ? { rollbackInstaller: rollback } : {
+      rollbackInstaller: {
+        path: healthDecision.state.previousInstaller,
+        sha256: healthDecision.state.previousInstallerSha256,
+      },
+    }),
+    cacheRoot: UPDATER_CACHE_ROOT,
+    rollbackRoot: ROLLBACK_ROOT,
+  });
+}
 
 const gotSingleInstanceLock = app.requestSingleInstanceLock();
 if (!gotSingleInstanceLock) {
@@ -396,7 +555,9 @@ function startBackend() {
   pythonProcess.on('exit', (code) => {
     console.log(`[Backend] Process exited with code ${code}`);
     if (!isQuitting) {
-      dialog.showErrorBox('后端异常退出', `Python 后端进程退出（code=${code}）。\n请检查日志或重启 ArHub。`);
+      if (!rollbackPendingUpdate(`Backend exited during startup verification (code=${code}).`)) {
+        dialog.showErrorBox('后端异常退出', `Python 后端进程退出（code=${code}）。\n请检查日志或重启 ArHub。`);
+      }
     }
   });
 }
@@ -586,6 +747,25 @@ function createTray() {
 app.on('ready', async () => {
   createTray();
 
+  if (RUNTIME_COMPATIBILITY_ERROR) {
+    const rollbackStarted = launchRollbackInstaller(RUNTIME_COMPATIBILITY_ERROR);
+    if (!rollbackStarted) dialog.showErrorBox('运行时不兼容', RUNTIME_COMPATIBILITY_ERROR);
+    isQuitting = true;
+    app.quit();
+    return;
+  }
+
+  const capabilityIssues = verifyPackagedCapabilities();
+  if (capabilityIssues.length > 0) {
+    console.error('[Capabilities] Startup verification failed:', capabilityIssues);
+    const reason = capabilityIssues.join('\n');
+    const rollbackStarted = launchRollbackInstaller(reason);
+    if (!rollbackStarted) dialog.showErrorBox('能力资源缺失', reason);
+    isQuitting = true;
+    app.quit();
+    return;
+  }
+
   // ⛔ 启动前完整性检查：python.exe 等关键文件是否被杀毒软件误删/隔离
   const runtimeIssues = verifyRuntime();
   if (runtimeIssues.length > 0) {
@@ -621,13 +801,38 @@ app.on('ready', async () => {
     await waitForBackend();
     console.log('[App] Backend is ready');
     if (mainWindow && !mainWindow.isDestroyed()) {
-      mainWindow.loadURL(`http://127.0.0.1:${actualPort}`);
+      await mainWindow.loadURL(`http://127.0.0.1:${actualPort}`);
+    }
+    if (!IS_DEV) {
+      const healthDecision = getStartupDecision(UPDATE_HEALTH_PATH, app.getVersion(), {
+        cacheRoot: UPDATER_CACHE_ROOT,
+        rollbackRoot: ROLLBACK_ROOT,
+        maxRollbackAttempts: 1,
+      });
+      if (healthDecision.action === 'probe') {
+        healthConfirmationTimer = setTimeout(() => {
+          try {
+            if (!pythonProcess || !mainWindow || mainWindow.isDestroyed()) {
+              throw new Error('Startup health did not remain stable through the verification window.');
+            }
+            markVersionHealthy(UPDATE_HEALTH_PATH, app.getVersion());
+            console.log(`[UpdateHealth] v${app.getVersion()} marked healthy.`);
+          } catch (error) {
+            console.error('[UpdateHealth] Delayed health confirmation failed:', error);
+            rollbackPendingUpdate(error.message);
+          }
+        }, 30_000);
+        healthConfirmationTimer.unref();
+      } else {
+        markVersionHealthy(UPDATE_HEALTH_PATH, app.getVersion());
+      }
     }
     // 启动 5 秒后静默检查更新
     setTimeout(() => initUpdater().catch(e => console.error('[Updater] init failed:', e)), 5000);
   } catch (err) {
     console.error('[App] Startup failed:', err);
-    dialog.showErrorBox('启动失败', `${err.message}\n\n日志位置：${MAIN_LOG}`);
+    const rollbackStarted = launchRollbackInstaller(err.message);
+    if (!rollbackStarted) dialog.showErrorBox('启动失败', `${err.message}\n\n日志位置：${MAIN_LOG}`);
     isQuitting = true;
     killBackend();
     app.quit();
@@ -640,6 +845,10 @@ app.on('ready', async () => {
 let updater = null;
 let updaterTimer = null;
 let updaterRetryTimer = null;
+let preparedUpdateVersion = '';
+let updateInstallationStarted = false;
+let preparedUpdateSource = 'manual';
+let healthConfirmationTimer = null;
 
 function sendUpdateProgress(progress) {
   if (!mainWindow || mainWindow.isDestroyed()) return;
@@ -653,6 +862,14 @@ function startAutomaticUpdateDownload(result, attempt = 0) {
     .then(() => {
       const status = updater.getDownloadStatus(result.version);
       if (!status.current || !status.downloaded) return;
+      try {
+        prepareUpdateInstallation(result.version);
+        preparedUpdateVersion = result.version;
+        preparedUpdateSource = 'automatic';
+      } catch (error) {
+        console.error('[Updater] update preparation failed:', error);
+        return;
+      }
       console.log(`[Updater] v${result.version} downloaded; it will install on normal app exit.`);
       sendUpdateAvailable({ ...result, downloaded: true });
     })
@@ -724,7 +941,7 @@ async function initUpdater() {
     allow_prerelease: updateCfg.allow_prerelease,
     require_publisher_verification: updateCfg.require_publisher_verification === true,
     auto_download: updateCfg.auto_download !== false,
-    install_on_quit: updateCfg.install_on_quit !== false,
+    install_on_quit: false,
     runtime_profile: RUNTIME_PROFILE,
     user_data_dir: USER_DATA_DIR,
     update_config_path: path.join(process.resourcesPath, 'app-update.yml'),
@@ -752,6 +969,9 @@ ipcMain.handle('updater:start-download', async () => {
     await updater.downloadUpdate(updater._lastCheck, (progress) => {
       sendUpdateProgress(progress);
     });
+    prepareUpdateInstallation(updater._lastCheck.version);
+    preparedUpdateVersion = updater._lastCheck.version;
+    preparedUpdateSource = 'manual';
     return { ok: true };
   } catch (e) {
     return { ok: false, error: e.message };
@@ -762,11 +982,17 @@ ipcMain.handle('updater:start-download', async () => {
 ipcMain.handle('updater:apply-and-restart', async () => {
   if (!updater) return { ok: false, error: 'updater not initialized' };
   try {
+    const status = updater.getDownloadStatus();
+    if (preparedUpdateVersion !== status.version) prepareUpdateInstallation(status.version);
+    preparedUpdateVersion = status.version;
+    preparedUpdateSource = 'manual';
     isQuitting = true;
     killBackend();
+    updateInstallationStarted = true;
     setTimeout(() => updater.applyUpdateAndRestart(), 250);
     return { ok: true };
   } catch (error) {
+    updateInstallationStarted = false;
     isQuitting = false;
     return { ok: false, error: error.message };
   }
@@ -794,6 +1020,7 @@ ipcMain.handle('updater:get-cached', async () => {
     }
     if (status.downloading) return { hasUpdate: false, reason: 'automatic update in progress' };
   }
+
   return updater._lastCheck || { hasUpdate: false, reason: 'no check yet' };
 });
 
@@ -804,7 +1031,21 @@ ipcMain.handle('updater:check-now', async () => {
 });
 
 app.on('before-quit', () => {
+  if (!IS_DEV && updater && preparedUpdateVersion && preparedUpdateSource === 'automatic' && !updateInstallationStarted) {
+    const status = updater.getDownloadStatus(preparedUpdateVersion);
+    if (status.current && status.downloaded) {
+      updateInstallationStarted = true;
+      setImmediate(() => {
+        try {
+          updater.applyUpdateAndRestart();
+        } catch (error) {
+          console.error('[Updater] install-on-quit failed:', error);
+        }
+      });
+    }
+  }
   isQuitting = true;
+  if (healthConfirmationTimer) clearTimeout(healthConfirmationTimer);
   if (updaterTimer) clearInterval(updaterTimer);
   if (updaterRetryTimer) clearTimeout(updaterRetryTimer);
   killBackend();

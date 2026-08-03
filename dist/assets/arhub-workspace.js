@@ -91,6 +91,8 @@ const FALLBACK_REGISTRY = {
     },
   ],
   tool_adapters: [],
+  views: [],
+  actions: [],
   errors: [],
   policy: { manifest_only: true, third_party_code_execution: false },
 };
@@ -110,6 +112,8 @@ const state = {
   resizeSaveTimer: null,
   attachments: [],
   attachmentSerial: 0,
+  claudeCapability: null,
+  claudeCapabilityPromise: null,
 };
 
 function clamp(value, min, max) {
@@ -131,6 +135,32 @@ function defaultPreferences() {
     floatBounds: null,
     profileId: "arhub.core/general",
   };
+}
+
+const ROLE_RUNTIME_KEYS = Object.freeze({
+  executor: "executor_agent_runtime",
+  reviewer: "reviewer_agent_runtime",
+  editor_ai: "editor_ai_agent_runtime",
+});
+
+function activeAgentName(parts = state.parts) {
+  return parts && isLiteAgentMode(parts) ? "editor_ai" : "executor";
+}
+
+function selectedRuntime(agentName = activeAgentName()) {
+  return (
+    state.settings?.[ROLE_RUNTIME_KEYS[agentName]] ||
+    state.settings?.agent_runtime ||
+    "openai_compatible"
+  );
+}
+
+function selectedEffort(agentName = activeAgentName(), runtime = selectedRuntime(agentName)) {
+  return runtime === "local_claude"
+    ? state.settings?.[`${agentName}_reasoning_effort`] ||
+        state.settings?.claude_effort ||
+        "high"
+    : state.settings?.[`${agentName}_reasoning_effort`] || "default";
 }
 
 function loadPreferences(workflowId) {
@@ -307,6 +337,22 @@ function loadSettings() {
     })
     .catch(() => ({}));
   return state.settingsPromise;
+}
+
+function loadClaudeCapability(force = false) {
+  if (force) state.claudeCapabilityPromise = null;
+  if (state.claudeCapabilityPromise) return state.claudeCapabilityPromise;
+  state.claudeCapabilityPromise = state.nativeFetch("/api/settings/detect-claude", {
+    cache: "no-store",
+  })
+    .then((response) => (response.ok ? response.json() : null))
+    .then((capability) => {
+      state.claudeCapability = capability;
+      scheduleEnhance();
+      return capability;
+    })
+    .catch(() => null);
+  return state.claudeCapabilityPromise;
 }
 
 async function saveSettingsPatch(patch) {
@@ -593,7 +639,7 @@ function ensureWorkspaceControls() {
   controls.setAttribute("aria-label", "工作区布局");
 
   const fileGroup = createControlGroup("文件面板");
-  const filesButton = createIconButton("☰", "显示或隐藏文件面板");
+  const filesButton = createLucideButton("PanelLeft", "显示或隐藏文件面板");
   filesButton.dataset.mwAction = "files";
   filesButton.addEventListener("click", () => {
     state.preferences.filesVisible = !state.preferences.filesVisible;
@@ -604,11 +650,11 @@ function ensureWorkspaceControls() {
 
   const canvasGroup = createControlGroup("主工作区");
   [
-    ["editor", "✎", "仅显示编辑器"],
-    ["split", "◫", "同时显示编辑器和预览"],
-    ["preview", "▣", "仅显示预览"],
+    ["editor", "FileText", "仅显示编辑器"],
+    ["split", "Columns2", "同时显示编辑器和预览"],
+    ["preview", "Eye", "仅显示预览"],
   ].forEach(([mode, icon, label]) => {
-    const button = createIconButton(icon, label);
+    const button = createLucideButton(icon, label);
     button.dataset.mwCanvas = mode;
     button.addEventListener("click", () => {
       state.preferences.canvas = mode;
@@ -620,21 +666,21 @@ function ensureWorkspaceControls() {
 
   const layoutGroup = createControlGroup("Agent 布局");
   [
-    ["auto", "◇", "自动布局"],
-    ["right", "▥", "Agent 停靠右侧"],
-    ["bottom", "▤", "Agent 停靠底部"],
-    ["float", "▱", "Agent 浮动窗口"],
-    ["focus", "□", "专注 Agent"],
-    ["hidden", "×", "隐藏 Agent"],
+    ["auto", "LayoutDashboard", "自动布局"],
+    ["right", "PanelRight", "Agent 停靠右侧"],
+    ["bottom", "PanelBottom", "Agent 停靠底部"],
+    ["float", "PanelsTopLeft", "Agent 浮动窗口"],
+    ["focus", "Maximize2", "专注 Agent"],
+    ["hidden", "EyeOff", "隐藏 Agent"],
   ].forEach(([mode, icon, label]) => {
-    const button = createIconButton(icon, label);
+    const button = createLucideButton(icon, label);
     button.dataset.mwLayout = mode;
     button.addEventListener("click", () => setLayout(mode));
     layoutGroup.append(button);
   });
 
   const extensionGroup = createControlGroup("扩展");
-  const extensionButton = createIconButton("⊞", "打开扩展中心");
+  const extensionButton = createLucideButton("Puzzle", "打开扩展中心");
   extensionButton.dataset.mwAction = "extensions";
   extensionButton.addEventListener("click", openExtensionDrawer);
   extensionGroup.append(extensionButton);
@@ -647,7 +693,7 @@ function ensureWorkspaceControls() {
 function ensureAgentLauncher() {
   let launcher = document.getElementById("mw-agent-launcher");
   if (launcher) return launcher;
-  launcher = createIconButton("AI", "显示 Agent", "mw-agent-launcher");
+  launcher = createLucideButton("Bot", "显示 Agent", "mw-agent-launcher");
   launcher.id = "mw-agent-launcher";
   launcher.addEventListener("click", () => {
     setLayout(state.preferences.previousLayout || "auto");
@@ -989,7 +1035,7 @@ function ensureProfileControls(parts) {
       updateAgentMeta(parts);
       updateComposerContext(parts);
     });
-    const extensions = createIconButton("⊞", "打开扩展中心");
+    const extensions = createLucideButton("Puzzle", "打开扩展中心");
     extensions.addEventListener("click", openExtensionDrawer);
     profileRow.append(select, extensions);
     meta.insertAdjacentElement("afterend", profileRow);
@@ -1052,11 +1098,13 @@ function updateAgentMeta(parts) {
   if (profile?.accent) {
     parts.agentPanel.style.setProperty("--mw-profile-accent", profile.accent);
   }
-  const runtime = state.settings?.agent_runtime || "openai_compatible";
-  const agentName = isLiteAgentMode(parts) ? "editor_ai" : "executor";
+  const agentName = activeAgentName(parts);
+  const runtime = selectedRuntime(agentName);
   const model =
     runtime === "local_claude"
-      ? state.settings?.claude_model || "Claude Code"
+      ? state.settings?.[`${agentName}_claude_model`] ||
+        state.settings?.claude_model ||
+        "Claude Code"
       : state.settings?.[`${agentName}_model_id`];
   const modelLabel = parts.header.querySelector(".mw-model-label");
   const nextModel = model || "模型未配置";
@@ -1071,14 +1119,20 @@ function updateAgentMeta(parts) {
   const runtimeSelect = parts.composer.querySelector(".mw-runtime-select");
   if (runtimeSelect && runtimeSelect.value !== runtime) runtimeSelect.value = runtime;
   const effortSelect = parts.composer.querySelector(".mw-effort-select");
-  const effort =
-    runtime === "local_claude"
-      ? state.settings?.claude_effort || "high"
-      : state.settings?.[`${agentName}_reasoning_effort`] || "default";
+  const effort = selectedEffort(agentName, runtime);
   if (effortSelect && effortSelect.value !== effort) effortSelect.value = effort;
   const composerModelControl = parts.composer.querySelector(".mw-composer-model");
   if (composerModelControl) {
-    composerModelControl.title = model ? `当前模型: ${model}` : "当前模型未配置";
+    const requested = effort === "default" ? "默认" : effort;
+    const effective =
+      runtime === "local_claude" && state.claudeCapability?.effective_effort
+        ? state.claudeCapability.effective_effort
+        : requested;
+    composerModelControl.title = [
+      model ? `当前模型: ${model}` : "当前模型未配置",
+      `运行时: ${runtime === "local_claude" ? "本机 Claude" : "开放模型"}`,
+      `思考强度: ${requested}${effective !== requested ? ` -> ${effective}` : ""}`,
+    ].join("\n");
   }
 }
 
@@ -1359,16 +1413,15 @@ function enhanceComposer(parts) {
       runtimeSelect.append(option);
     });
     runtimeSelect.addEventListener("change", async () => {
-      const previous = state.settings?.agent_runtime || "openai_compatible";
+      const agentName = activeAgentName(parts);
+      const runtimeKey = ROLE_RUNTIME_KEYS[agentName];
+      const previous = selectedRuntime(agentName);
       try {
         if (runtimeSelect.value === "local_claude") {
-          const detected = await state.nativeFetch("/api/settings/detect-claude", {
-            cache: "no-store",
-          });
-          const payload = detected.ok ? await detected.json() : null;
+          const payload = await loadClaudeCapability(true);
           if (!payload?.compatible) throw new Error("未检测到可用的本机 Claude Code");
         }
-        await saveSettingsPatch({ agent_runtime: runtimeSelect.value });
+        await saveSettingsPatch({ [runtimeKey]: runtimeSelect.value });
       } catch (error) {
         runtimeSelect.value = previous;
         runtimeSelect.title = String(error?.message || error);
@@ -1397,12 +1450,9 @@ function enhanceComposer(parts) {
       effortSelect.append(option);
     });
     effortSelect.addEventListener("change", async () => {
-      const runtime = state.settings?.agent_runtime || "openai_compatible";
-      const agentName = isLiteAgentMode(parts) ? "editor_ai" : "executor";
-      const key =
-        runtime === "local_claude"
-          ? "claude_effort"
-          : `${agentName}_reasoning_effort`;
+      const agentName = activeAgentName(parts);
+      const runtime = selectedRuntime(agentName);
+      const key = `${agentName}_reasoning_effort`;
       const fallback = runtime === "local_claude" ? "high" : "default";
       const previous = state.settings?.[key] || fallback;
       try {
@@ -1532,7 +1582,7 @@ function extensionSection(title, values, renderRow) {
   return section;
 }
 
-function extensionRow(title, subtitle, badge) {
+function extensionRow(title, subtitle, badge, tone = "neutral") {
   const row = document.createElement("div");
   row.className = "mw-extension-row";
   const text = document.createElement("div");
@@ -1544,6 +1594,7 @@ function extensionRow(title, subtitle, badge) {
   const chip = document.createElement("span");
   chip.className = "mw-extension-chip";
   chip.textContent = badge;
+  chip.dataset.tone = tone;
   row.append(text, chip);
   return row;
 }
@@ -1571,7 +1622,27 @@ function renderExtensionDrawer() {
       extensionRow(command.label, command.description, "Prompt"),
     ),
     extensionSection("Tool Adapters", state.registry.tool_adapters || [], (tool) =>
-      extensionRow(tool.label, tool.description, tool.enabled ? "启用" : "未启用"),
+      extensionRow(
+        tool.label,
+        [tool.description, ...(tool.permissions || [])].filter(Boolean).join(" · "),
+        tool.enabled ? "启用" : "未启用",
+        tool.enabled ? "allowed" : "blocked",
+      ),
+    ),
+    extensionSection("视图", state.registry.views || [], (view) =>
+      extensionRow(
+        view.label,
+        `${view.description || ""}${view.output_contract ? ` · ${view.output_contract}` : ""}`,
+        view.kind,
+      ),
+    ),
+    extensionSection("操作", state.registry.actions || [], (action) =>
+      extensionRow(
+        action.label,
+        [action.description, ...(action.permissions || [])].filter(Boolean).join(" · "),
+        action.enabled ? "可用" : "已阻止",
+        action.enabled ? "allowed" : "blocked",
+      ),
     ),
   );
   if (state.registry.errors?.length) {
@@ -1601,14 +1672,14 @@ function openExtensionDrawer() {
   version.textContent = `Manifest ${state.registry.schema_version || "1.0"}`;
   title.append(heading, version);
   const actions = document.createElement("div");
-  const refresh = createIconButton("↻", "刷新扩展");
+  const refresh = createLucideButton("RefreshCw", "刷新扩展");
   refresh.addEventListener("click", async () => {
     refresh.disabled = true;
     await loadRegistry(true);
     renderExtensionDrawer();
     refresh.disabled = false;
   });
-  const close = createIconButton("×", "关闭扩展中心");
+  const close = createLucideButton("X", "关闭扩展中心");
   close.addEventListener("click", closeExtensionDrawer);
   actions.append(refresh, close);
   header.append(title, actions);
@@ -1675,6 +1746,7 @@ function enhanceEditor() {
   applyWorkspaceState();
   loadRegistry();
   loadSettings();
+  loadClaudeCapability();
 }
 
 function scheduleEnhance() {

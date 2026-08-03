@@ -50,6 +50,10 @@ class ExtensionRegistryTests(unittest.TestCase):
 
             self.assertEqual(snapshot["errors"], [])
             self.assertEqual(snapshot["views"][0]["id"], "arhub.test/canvas")
+            self.assertEqual(
+                snapshot["views"][0]["output_contract"],
+                "arhub.artifact.diagram.v1",
+            )
             self.assertTrue(snapshot["actions"][0]["enabled"])
             self.assertEqual(snapshot["extensions"][0]["contribution_counts"]["actions"], 1)
 
@@ -85,6 +89,8 @@ class BuiltinStudioActionTests(unittest.TestCase):
             self.assertIn("flowchart TD", source.read_text(encoding="utf-8"))
             self.assertIn("<svg", preview.read_text(encoding="utf-8"))
             self.assertIn("arhub.diagram/preview/diagrams/research-plan.svg", result["preview_url"])
+            self.assertEqual(result["protocol"], "arhub.artifact-set.v1")
+            self.assertEqual(result["primary_artifact"], "diagrams/research-plan.svg")
 
     def test_web_action_creates_a_local_previewable_project(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -101,6 +107,8 @@ class BuiltinStudioActionTests(unittest.TestCase):
             self.assertTrue((project / "app.js").is_file())
             self.assertIn("Project site", (project / "index.html").read_text(encoding="utf-8"))
             self.assertIn("arhub.web/preview/web/project-site/index.html", result["preview_url"])
+            self.assertEqual(result["protocol"], "arhub.artifact-set.v1")
+            self.assertEqual(result["primary_artifact"], "web/project-site/index.html")
 
 
 if __name__ == "__main__":

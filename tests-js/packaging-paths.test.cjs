@@ -47,6 +47,27 @@ test('Windows installer exposes a custom installation directory', (t) => {
       '!python/Lib/site-packages/tensorflow*/**/*',
     ),
   );
+
+  process.env.ARHUB_RUNTIME_PROFILE = 'app-only';
+  process.env.ARHUB_RUNTIME_DIR = path.join(runtimeDir, 'does-not-exist');
+  delete require.cache[require.resolve(configPath)];
+  const appOnlyConfig = require(configPath);
+  assert.match(appOnlyConfig.win.artifactName, /-app-only-/);
+  assert.deepEqual(appOnlyConfig.extraFiles, []);
+  assert.equal(appOnlyConfig.extraMetadata.arhubPackageProfile, 'app-only');
+  assert.equal(appOnlyConfig.extraMetadata.arhubRuntimeProfile, 'external');
+  assert.match(appOnlyConfig.extraMetadata.arhubRuntimeVersion, /^\d{4}\.\d{2}\.\d{2}/);
+  assert.deepEqual(appOnlyConfig.extraMetadata.arhubRuntimeCompatibility.profiles, ['full', 'lite']);
+  assert.equal(appOnlyConfig.extraMetadata.arhubRuntimeCompatibility.requiresExternalRuntime, true);
+  for (const requiredFile of [
+    'runtime-store.js',
+    'update-health.js',
+    'scripts/verify-capabilities.cjs',
+    'packaging/runtime-bundle.json',
+    'packaging/runtime-lock.json',
+  ]) {
+    assert.ok(appOnlyConfig.files.includes(requiredFile), requiredFile);
+  }
 });
 
 test('release tooling does not infer the runtime from an installed ArHub copy', () => {

@@ -5,13 +5,13 @@ const path = require('node:path');
 const APP_EXECUTABLE = 'ArHub.exe';
 const ELEVATION_HELPER = path.join('win-unpacked', 'resources', 'elevate.exe');
 
-function getArtifactName(version, artifactSuffix = '', arch = 'x64') {
+function getArtifactName(version, artifactSuffix = '', arch = 'x64', profileSuffix = '') {
   if (!version) throw new Error('A package version is required to build the signing policy.');
-  return `ArHub-Setup-${version}-${arch}${artifactSuffix}.exe`;
+  return `ArHub-Setup-${version}${profileSuffix}-${arch}${artifactSuffix}.exe`;
 }
 
-function getSigningSuffixes(version, artifactSuffix = '', arch = 'x64') {
-  const artifactName = getArtifactName(version, artifactSuffix, arch);
+function getSigningSuffixes(version, artifactSuffix = '', arch = 'x64', profileSuffix = '') {
+  const artifactName = getArtifactName(version, artifactSuffix, arch, profileSuffix);
   const uninstallerName = artifactName.replace(/\.exe$/i, '.__uninstaller.exe');
   return [
     APP_EXECUTABLE,

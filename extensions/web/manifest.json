@@ -5,6 +5,7 @@
   "version": "0.1.0",
   "description": "Create a local HTML, CSS and JavaScript project with an isolated in-app preview.",
   "license": "MIT",
+  "permissions": ["workspace.read", "workspace.write", "preview.render"],
   "contributes": {
     "commands": [
       {
@@ -20,7 +21,8 @@
         "label": "网页预览",
         "description": "在隔离预览框中查看当前工作区的静态网页。",
         "kind": "web",
-        "icon": "Code2"
+        "icon": "Code2",
+        "output_contract": "arhub.artifact.web.v1"
       }
     ],
     "actions": [
@@ -28,7 +30,9 @@
         "id": "create",
         "label": "新建网页项目",
         "description": "创建包含 HTML、CSS 和 JavaScript 的可预览网页项目。",
-        "handler": "builtin.web.create"
+        "handler": "builtin.web.create",
+        "permissions": ["workspace.write", "preview.render"],
+        "output_contract": "arhub.artifact-set.v1"
       }
     ],
     "tool_adapters": []

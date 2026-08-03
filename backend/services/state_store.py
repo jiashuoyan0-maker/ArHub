@@ -5,6 +5,8 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import shutil
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -19,6 +21,7 @@ log = logging.getLogger(__name__)
 
 DB_PATH = Path(CONFIG_DB_PATH)
 SCHEMA_PATH = BACKEND_DIR / "db" / "schema.sql"
+SCHEMA_VERSION = 1
 
 _JSON_FIELDS = {"params", "output_files", "data", "response"}
 _WORKFLOW_FIELDS = {
@@ -95,6 +98,27 @@ async def _ensure_columns(db: aiosqlite.Connection) -> None:
         await db.execute("ALTER TABLE workflow_steps ADD COLUMN primary_output TEXT")
 
 
+async def _schema_version(db: aiosqlite.Connection) -> int:
+    cursor = await db.execute("PRAGMA user_version")
+    row = await cursor.fetchone()
+    return int(row[0] if row else 0)
+
+
+def _backup_database(version: int) -> Path | None:
+    if not DB_PATH.is_file() or DB_PATH.stat().st_size == 0:
+        return None
+    backup_dir = DB_PATH.parent / "backups"
+    backup_dir.mkdir(parents=True, exist_ok=True)
+    timestamp = datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ")
+    target = backup_dir / f"aris-schema-{version}-{timestamp}.db"
+    suffix = 1
+    while target.exists():
+        target = backup_dir / f"aris-schema-{version}-{timestamp}-{suffix}.db"
+        suffix += 1
+    shutil.copy2(DB_PATH, target)
+    return target
+
+
 async def init_db() -> None:
     """Create or migrate the database and remember interrupted workflow IDs."""
     if not SCHEMA_PATH.is_file():
@@ -102,8 +126,18 @@ async def init_db() -> None:
 
     db = await get_db()
     try:
+        current_version = await _schema_version(db)
+        if current_version > SCHEMA_VERSION:
+            raise RuntimeError(
+                f"Database schema {current_version} is newer than supported {SCHEMA_VERSION}."
+            )
+        if current_version < SCHEMA_VERSION:
+            backup = _backup_database(current_version)
+            if backup:
+                log.info("Database backup created before migration: %s", backup)
         await db.executescript(SCHEMA_PATH.read_text(encoding="utf-8"))
         await _ensure_columns(db)
+        await db.execute(f"PRAGMA user_version = {SCHEMA_VERSION}")
         cursor = await db.execute(
             "SELECT id FROM workflows WHERE status = 'running' ORDER BY updated_at"
         )

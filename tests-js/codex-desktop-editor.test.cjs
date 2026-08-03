@@ -16,6 +16,7 @@ test('Codex-inspired editor layer loads last and keeps contextual panels accessi
   const studioCss = read('dist', 'assets', 'arhub-editor-studio.css');
   const shellScript = read('dist', 'assets', 'arhub-codex-shell.js');
   const shellCss = read('dist', 'assets', 'arhub-codex-shell.css');
+  const settingsScript = read('dist', 'assets', 'arhub-studio-shell.js');
 
   assert.ok(html.indexOf('/assets/arhub-codex-desktop.css') > html.indexOf('/assets/arhub-codex-shell.css'));
   assert.ok(html.indexOf('/assets/arhub-codex-desktop.js') > html.indexOf('/assets/arhub-codex-shell.js'));
@@ -39,6 +40,14 @@ test('Codex-inspired editor layer loads last and keeps contextual panels accessi
   assert.match(shellScript, /community\.target = "_blank"/);
   assert.match(shellScript, /community\.rel = "noopener noreferrer"/);
   assert.match(shellScript, /footer\.append\(extensions, community\)/);
+  assert.match(settingsScript, /runtimeRole\("执行者 Agent", "executor"\)/);
+  assert.match(settingsScript, /runtimeRole\("审稿者 Agent", "reviewer"\)/);
+  assert.match(settingsScript, /runtimeRole\("编辑器助手", "editor_ai"\)/);
+  assert.match(settingsScript, /\$\{agent\}_agent_runtime/);
+  assert.match(settingsScript, /\$\{agent\}_provider/);
+  assert.match(settingsScript, /\$\{agent\}_reasoning_effort/);
+  assert.match(settingsScript, /\$\{agent\}_claude_model/);
+  assert.match(settingsScript, /runtimeField\(\s*"默认 Claude 强度",\s*claudeEffort,\s*"claude_effort"/s);
   assert.match(shellCss, /\.mw-shell-community-link/);
 });
 
@@ -51,6 +60,16 @@ test('Agent composer keeps the prompt dominant and exposes runtime controls', ()
   assert.match(script, /stopping \? "Square" : "ArrowUp"/);
   assert.match(script, /data-mw-agent-action/);
   assert.match(script, /mw-composer-model-text/);
+  assert.match(script, /ROLE_RUNTIME_KEYS/);
+  assert.match(script, /executor_agent_runtime/);
+  assert.doesNotMatch(script, /executor_runtime["']/);
+  assert.match(script, /\$\{agentName\}_reasoning_effort/);
+  assert.match(script, /loadClaudeCapability/);
+  assert.match(script, /createLucideButton\("PanelLeft"/);
+  assert.match(script, /createLucideButton\("Puzzle"/);
+  assert.match(script, /extensionSection\("视图"/);
+  assert.match(script, /extensionSection\("操作"/);
+  assert.match(script, /action\.permissions/);
   assert.match(script, /mw-attachment-input/);
   assert.match(script, /artifacts\/upload\?target_dir=attachments/);
   assert.match(script, /extract-status\?target_dir=attachments/);
@@ -62,8 +81,11 @@ test('Agent composer keeps the prompt dominant and exposes runtime controls', ()
   assert.match(css, /\.mw-composer-model\s*{/);
   assert.match(css, /\.mw-attachment-chip\s*{/);
   assert.match(css, /backdrop-filter:\s*saturate\(170%\) blur\(28px\)/);
+  assert.match(css, /--mw-control-size:\s*44px/);
+  assert.match(css, /\.mw-workspace-controls \.mw-icon-button[\s\S]*min-height:\s*var\(--mw-control-size\)/);
   assert.match(finalCss, /html\.arhub-editor-studio-active\.mw-editor-active \.mw-composer-row\s*{[^}]*display:\s*flex !important/s);
   assert.match(finalCss, /html\.arhub-editor-studio-active\.mw-editor-active \.mw-agent-input\s*{[^}]*flex:\s*0 0 100% !important/s);
   assert.match(finalCss, /width:\s*100% !important/);
   assert.match(finalCss, /\.mw-composer-row > \.mw-agent-action\s*{[^}]*order:\s*3/s);
+  assert.match(finalCss, /min-height:\s*44px !important/);
 });
