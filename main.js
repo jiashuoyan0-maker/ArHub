@@ -17,7 +17,7 @@ const fs = require('fs');
 const PACKAGE_METADATA = require('./package.json');
 
 // 自动更新器
-const { Updater } = require('./updater');
+const { Updater, normalizeRuntimeProfile } = require('./updater');
 
 // ── 路径 ──
 const IS_DEV = !app.isPackaged;
@@ -26,9 +26,13 @@ const APP_ROOT = IS_DEV ? __dirname : path.join(process.resourcesPath, 'app');
 const RUNTIME_DIR = IS_DEV
   ? path.join(__dirname, 'runtime')
   : path.join(path.dirname(process.resourcesPath), 'runtime');
-const RUNTIME_PROFILE = String(
-  process.env.ARHUB_RUNTIME_PROFILE || PACKAGE_METADATA.arhubRuntimeProfile || 'full',
-).toLowerCase();
+// Packaged metadata is part of the signed/hashed application payload. An
+// ambient environment variable must not be able to change update channels.
+const RUNTIME_PROFILE = normalizeRuntimeProfile(
+  IS_DEV
+    ? process.env.ARHUB_RUNTIME_PROFILE || PACKAGE_METADATA.arhubRuntimeProfile || 'full'
+    : PACKAGE_METADATA.arhubRuntimeProfile,
+);
 
 const PYTHON_EXE = path.join(RUNTIME_DIR, 'python', 'python.exe');
 const BACKEND_DIR = IS_DEV
@@ -635,6 +639,32 @@ app.on('ready', async () => {
 // ============================================================
 let updater = null;
 let updaterTimer = null;
+let updaterRetryTimer = null;
+
+function sendUpdateProgress(progress) {
+  if (!mainWindow || mainWindow.isDestroyed()) return;
+  mainWindow.webContents.send('update-progress', progress);
+}
+
+function startAutomaticUpdateDownload(result, attempt = 0) {
+  if (!updater || !result || !result.hasUpdate || updater.config.auto_download !== true) return;
+  if (!updater.getDownloadStatus(result.version).current) return;
+  updater.downloadUpdate(result, sendUpdateProgress)
+    .then(() => {
+      const status = updater.getDownloadStatus(result.version);
+      if (!status.current || !status.downloaded) return;
+      console.log(`[Updater] v${result.version} downloaded; it will install on normal app exit.`);
+      sendUpdateAvailable({ ...result, downloaded: true });
+    })
+    .catch((error) => {
+      console.error('[Updater] automatic download failed:', error);
+      if (attempt >= 2 || isQuitting || !updater.getDownloadStatus(result.version).current) return;
+      const delay = attempt === 0 ? 5 * 60 * 1000 : 30 * 60 * 1000;
+      if (updaterRetryTimer) clearTimeout(updaterRetryTimer);
+      updaterRetryTimer = setTimeout(() => startAutomaticUpdateDownload(result, attempt + 1), delay);
+      updaterRetryTimer.unref();
+    });
+}
 
 function sendUpdateAvailable(result) {
   if (!result || !result.hasUpdate || !mainWindow || mainWindow.isDestroyed()) return;
@@ -643,6 +673,7 @@ function sendUpdateAvailable(result) {
     changelog: result.changelog,
     fileCount: result.fileCount || result.changedFiles.length,
     totalSize: result.totalSize,
+    downloaded: result.downloaded === true,
   });
 }
 
@@ -651,7 +682,8 @@ async function checkAndNotifyUpdate(force = false) {
   const result = await updater.checkForUpdate({ force });
   if (result.hasUpdate) {
     console.log(`[Updater] update available: v${result.version} (${result.fileCount} artifacts, ${(result.totalSize / 1024 / 1024).toFixed(2)} MB)`);
-    sendUpdateAvailable(result);
+    if (updater.config.auto_download === true) startAutomaticUpdateDownload(result);
+    else sendUpdateAvailable(result);
   } else {
     console.log(`[Updater] no update: ${result.reason}`);
   }
@@ -671,6 +703,8 @@ async function initUpdater() {
     check_interval_hours: 6,
     allow_prerelease: false,
     require_publisher_verification: false,
+    auto_download: true,
+    install_on_quit: true,
   };
   try {
     const cfgPath = path.join(APP_ROOT, 'updater-config.json');
@@ -689,6 +723,9 @@ async function initUpdater() {
     check_interval_hours: updateCfg.check_interval_hours,
     allow_prerelease: updateCfg.allow_prerelease,
     require_publisher_verification: updateCfg.require_publisher_verification === true,
+    auto_download: updateCfg.auto_download !== false,
+    install_on_quit: updateCfg.install_on_quit !== false,
+    runtime_profile: RUNTIME_PROFILE,
     user_data_dir: USER_DATA_DIR,
     update_config_path: path.join(process.resourcesPath, 'app-update.yml'),
     logger: console,
@@ -713,9 +750,7 @@ ipcMain.handle('updater:start-download', async () => {
   }
   try {
     await updater.downloadUpdate(updater._lastCheck, (progress) => {
-      if (mainWindow && !mainWindow.isDestroyed()) {
-        mainWindow.webContents.send('update-progress', progress);
-      }
+      sendUpdateProgress(progress);
     });
     return { ok: true };
   } catch (e) {
@@ -752,6 +787,13 @@ ipcMain.handle('updater:skip-version', async (_e, version) => {
 // IPC: 前端拉取缓存的检查结果 (用户激活通过后调用, 不会重新查 manifest)
 ipcMain.handle('updater:get-cached', async () => {
   if (!updater) return { hasUpdate: false, reason: 'updater not initialized' };
+  if (updater.config.auto_download === true) {
+    const status = updater.getDownloadStatus();
+    if (status.current && status.downloaded && updater._lastCheck) {
+      return { ...updater._lastCheck, downloaded: true };
+    }
+    if (status.downloading) return { hasUpdate: false, reason: 'automatic update in progress' };
+  }
   return updater._lastCheck || { hasUpdate: false, reason: 'no check yet' };
 });
 
@@ -764,6 +806,7 @@ ipcMain.handle('updater:check-now', async () => {
 app.on('before-quit', () => {
   isQuitting = true;
   if (updaterTimer) clearInterval(updaterTimer);
+  if (updaterRetryTimer) clearTimeout(updaterRetryTimer);
   killBackend();
 });
 

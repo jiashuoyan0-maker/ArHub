@@ -75422,7 +75422,7 @@ function _Component22() {
     }
     let n = e.updater.onUpdateAvailable(e => {
       r(e);
-      t(`available`);
+      t(e.downloaded ? `ready` : `available`);
     });
     let i = e.updater.onProgress(e => {
       a(e);
@@ -75435,7 +75435,7 @@ function _Component22() {
           fileCount: e.changedFiles?.length || 0,
           totalSize: e.totalSize || 0
         });
-        t(`available`);
+        t(e.downloaded ? `ready` : `available`);
       }
     }).catch(() => {});
     return () => {

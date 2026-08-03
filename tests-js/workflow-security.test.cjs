@@ -105,6 +105,20 @@ test('Windows CI uses portable Node test discovery and avoids duplicate branch r
   assert.match(quality, /pull_request:/);
 });
 
+test('automatic Lite publishing only trusts successful main pushes from this repository', () => {
+  const workflow = fs.readFileSync(path.join(workflowDir, 'auto-lite-candidate.yml'), 'utf8');
+  assert.match(workflow, /workflow_run\.event == 'push'/);
+  assert.match(workflow, /workflow_run\.head_branch == 'main'/);
+  assert.match(workflow, /workflow_run\.head_repository\.full_name == github\.repository/);
+  assert.match(workflow, /workflow_run\.head_sha == github\.sha/);
+  assert.match(workflow, /cancel-in-progress:\s*true/);
+  assert.match(workflow, /-RuntimeProfile lite\b/);
+  assert.match(workflow, /-SkipTests\b/);
+  assert.match(workflow, /--target '\$\{\{ github\.event\.workflow_run\.head_sha \|\| github\.sha \}\}'/);
+  assert.doesNotMatch(workflow, /git push origin/);
+  assert.doesNotMatch(workflow, /scripts\/assert-runtime\.ps1/);
+});
+
 test('maintenance runs under PowerShell 7 and uses exact-title issue synchronization', () => {
   const maintenance = fs.readFileSync(path.join(workflowDir, 'maintenance.yml'), 'utf8');
   const issueSync = fs.readFileSync(

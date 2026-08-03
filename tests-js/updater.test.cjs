@@ -7,7 +7,15 @@ const os = require('node:os');
 const path = require('node:path');
 const test = require('node:test');
 
-const { Updater, hasPublisherName, normalizeReleaseNotes } = require('../updater');
+const {
+  Updater,
+  classifyInstaller,
+  hasPublisherName,
+  isInstallerAsset,
+  isRuntimeProfileCompatible,
+  normalizeRuntimeProfile,
+  normalizeReleaseNotes,
+} = require('../updater');
 
 class FakeCancellationToken {
   constructor() {
@@ -55,7 +63,7 @@ class FakeAutoUpdater extends EventEmitter {
   }
 }
 
-function createFixture() {
+function createFixture(config = {}) {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'arhub-updater-'));
   const configPath = path.join(root, 'app-update.yml');
   fs.writeFileSync(configPath, 'provider: github\n', 'utf8');
@@ -65,7 +73,9 @@ function createFixture() {
       user_data_dir: root,
       update_config_path: configPath,
       check_interval_hours: 6,
+      runtime_profile: 'full',
       logger: { info() {}, warn() {}, error() {} },
+      ...config,
     },
     { autoUpdater, CancellationToken: FakeCancellationToken },
   );
@@ -82,6 +92,26 @@ test('publisherName detection accepts scalar and list values', () => {
 test('release notes are normalized for the renderer', () => {
   assert.equal(normalizeReleaseNotes('  Ready  '), 'Ready');
   assert.equal(normalizeReleaseNotes([{ version: '1.2.0', note: 'Changes' }]), 'v1.2.0: Changes');
+});
+
+test('installer profiles are classified and cannot cross-update', () => {
+  const lite = [{ url: 'ArHub-Setup-1.2.0-lite-x64.exe' }];
+  const full = [{ url: 'ArHub-Setup-1.2.0-x64.exe' }];
+  assert.equal(classifyInstaller(lite[0].url), 'lite');
+  assert.equal(classifyInstaller(full[0].url), 'full');
+  assert.equal(isRuntimeProfileCompatible(lite, 'lite'), true);
+  assert.equal(isRuntimeProfileCompatible(lite, 'full'), false);
+  assert.equal(isRuntimeProfileCompatible(full, 'full'), true);
+  assert.equal(isRuntimeProfileCompatible(full, 'lite'), false);
+  assert.equal(isRuntimeProfileCompatible(full, 'unknown'), false);
+  assert.equal(isRuntimeProfileCompatible([
+    { url: 'ArHub-Setup-1.2.0-lite-x64.exe' },
+    { url: 'unexpected-x64.exe' },
+    { url: 'ArHub-Setup-1.2.0-lite-x64.exe.blockmap' },
+  ], 'lite'), false);
+  assert.equal(isInstallerAsset('ArHub-Setup-1.2.0-lite-x64.exe.blockmap'), false);
+  assert.equal(normalizeRuntimeProfile(' LITE '), 'lite');
+  assert.equal(normalizeRuntimeProfile('unexpected'), 'unknown');
 });
 
 test('publisher verification remains available for an explicitly signed build', () => {
@@ -128,13 +158,67 @@ test('available update can be downloaded and installed', async (t) => {
   assert.equal(result.fileCount, 1);
 
   const progress = [];
-  const download = await fixture.updater.downloadUpdate(result, (value) => progress.push(value.percent));
+  const download = await fixture.updater.downloadUpdate(result, (value) => progress.push([value.percent, value.current]));
   assert.equal(download.ok, true);
-  assert.deepEqual(progress, [50, 100]);
+  assert.deepEqual(progress, [[50, 1024], [100, 1]]);
 
   fixture.updater.applyUpdateAndRestart();
   assert.equal(fixture.autoUpdater.installed, true);
-  assert.deepEqual(fixture.autoUpdater.installArgs, [false, true]);
+  assert.deepEqual(fixture.autoUpdater.installArgs, [true, true]);
+});
+
+test('a Full install ignores a Lite-only release manifest', async (t) => {
+  const fixture = createFixture({ runtime_profile: 'full' });
+  t.after(() => fs.rmSync(fixture.root, { recursive: true, force: true }));
+  fixture.autoUpdater.checkForUpdates = async function checkForLiteUpdate() {
+    queueMicrotask(() => this.emit('update-available', {
+      version: '1.2.0',
+      files: [{ url: 'ArHub-Setup-1.2.0-lite-x64.exe', size: 1024, sha512: 'abc' }],
+    }));
+    return {};
+  };
+
+  const result = await fixture.updater.checkForUpdate({ force: true });
+  assert.equal(result.hasUpdate, false);
+  assert.equal(result.reason, 'runtime profile mismatch');
+});
+
+test('download state is bound to the checked version', async (t) => {
+  const fixture = createFixture();
+  t.after(() => fs.rmSync(fixture.root, { recursive: true, force: true }));
+  let nextVersion = '1.1.0';
+  let releaseFirstDownload;
+  let downloadCalls = 0;
+  fixture.autoUpdater.checkForUpdates = async function checkVersion() {
+    const version = nextVersion;
+    queueMicrotask(() => this.emit('update-available', {
+      version,
+      files: [{ url: `ArHub-Setup-${version}-x64.exe`, size: 1024, sha512: 'abc' }],
+    }));
+    return {};
+  };
+  fixture.autoUpdater.downloadUpdate = async function downloadVersion() {
+    downloadCalls += 1;
+    if (downloadCalls === 1) await new Promise((resolve) => { releaseFirstDownload = resolve; });
+    this.emit('update-downloaded', {});
+    return [`ArHub-Setup-${nextVersion}-x64.exe`];
+  };
+
+  const first = await fixture.updater.checkForUpdate({ force: true });
+  const firstDownload = fixture.updater.downloadUpdate(first);
+  nextVersion = '1.2.0';
+  const second = await fixture.updater.checkForUpdate({ force: true });
+  await assert.rejects(() => fixture.updater.downloadUpdate(second), /another update version/i);
+  releaseFirstDownload();
+  await firstDownload;
+  assert.equal(fixture.updater.getDownloadStatus('1.1.0').downloaded, true);
+  assert.equal(fixture.updater.getDownloadStatus('1.2.0').downloaded, false);
+  assert.throws(() => fixture.updater.applyUpdateAndRestart(), /current update/i);
+
+  await fixture.updater.downloadUpdate(second);
+  assert.equal(fixture.updater.getDownloadStatus('1.2.0').downloaded, true);
+  fixture.updater.applyUpdateAndRestart();
+  assert.equal(fixture.autoUpdater.installed, true);
 });
 
 test('skipped version is not offered again', async (t) => {

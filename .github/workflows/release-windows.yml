@@ -22,6 +22,7 @@ permissions:
 
 jobs:
   build-and-release:
+    if: github.event_name == 'workflow_dispatch' || !contains(github.ref_name, '-beta.')
     runs-on: [self-hosted, Windows, X64, arhub-release]
     timeout-minutes: 360
     env:

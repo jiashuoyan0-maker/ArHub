@@ -14,6 +14,14 @@ $content = [System.IO.File]::ReadAllText($resolved, $utf8)
 $tick = [char]96
 
 $replacements = @(
+    [pscustomobject]@{
+        From = 'e.updater.onUpdateAvailable(e=>{r(e),t(`available`)}),i=e.updater.onProgress'
+        To = 'e.updater.onUpdateAvailable(e=>{r(e),t(e.downloaded?`ready`:`available`)}),i=e.updater.onProgress'
+    }
+    [pscustomobject]@{
+        From = 'totalSize:e.totalSize||0}),t(`available`))}).catch'
+        To = 'totalSize:e.totalSize||0}),t(e.downloaded?`ready`:`available`))}).catch'
+    }
     [pscustomobject]@{ From = "executor_model_id:$($tick)claude-opus-4-6$($tick)"; To = "executor_model_id:$($tick)$($tick)" }
     [pscustomobject]@{ From = "reviewer_model_id:$($tick)claude-opus-4-6$($tick)"; To = "reviewer_model_id:$($tick)$($tick)" }
     [pscustomobject]@{ From = "editor_ai_model_id:$($tick)claude-opus-4-6$($tick)"; To = "editor_ai_model_id:$($tick)$($tick)" }
@@ -58,6 +66,32 @@ if (-not $FrontendSourcePath) {
 $sourceResolved = (Resolve-Path -LiteralPath $FrontendSourcePath).Path
 $sourceContent = [System.IO.File]::ReadAllText($sourceResolved, $utf8)
 $sourceReplacements = @(
+    [pscustomobject]@{
+        From = @'
+    let n = e.updater.onUpdateAvailable(e => {
+      r(e);
+      t(`available`);
+    });
+'@
+        To = @'
+    let n = e.updater.onUpdateAvailable(e => {
+      r(e);
+      t(e.downloaded ? `ready` : `available`);
+    });
+'@
+    }
+    [pscustomobject]@{
+        From = @'
+        t(`available`);
+      }
+    }).catch(() => {});
+'@
+        To = @'
+        t(e.downloaded ? `ready` : `available`);
+      }
+    }).catch(() => {});
+'@
+    }
     [pscustomobject]@{
         From = 'placeholder={n === `executor` ? `例如 claude-opus-4-6 / claude-sonnet-4-5-20250929（传给 Claude CLI --model）` : `例如 gpt-4o / claude-sonnet-4-5-20250929`}'
         To = 'placeholder={`例如 deepseek-chat / glm-4.5 / gpt-4o`}'

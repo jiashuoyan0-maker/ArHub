@@ -7,9 +7,36 @@ const DEFAULT_CONFIG = Object.freeze({
   check_interval_hours: 6,
   allow_prerelease: false,
   require_publisher_verification: false,
+  auto_download: false,
+  install_on_quit: true,
+  runtime_profile: 'unknown',
   user_data_dir: null,
   update_config_path: null,
 });
+
+function classifyInstaller(url) {
+  const name = String(url || '').split(/[?#]/, 1)[0].replace(/\\/g, '/').split('/').pop() || '';
+  if (!/^ArHub-Setup-.*-x64\.exe$/i.test(name)) return null;
+  return /-lite-x64\.exe$/i.test(name) ? 'lite' : 'full';
+}
+
+function isInstallerAsset(url) {
+  const name = String(url || '').split(/[?#]/, 1)[0].replace(/\\/g, '/').split('/').pop() || '';
+  return /\.exe$/i.test(name);
+}
+
+function normalizeRuntimeProfile(value) {
+  const profile = String(value || '').trim().toLowerCase();
+  return ['lite', 'full'].includes(profile) ? profile : 'unknown';
+}
+
+function isRuntimeProfileCompatible(files, runtimeProfile) {
+  const profile = normalizeRuntimeProfile(runtimeProfile);
+  if (profile === 'unknown') return false;
+  const installers = (Array.isArray(files) ? files : []).filter((file) => isInstallerAsset(file && file.url));
+  return installers.length > 0
+    && installers.every((file) => classifyInstaller(file && file.url) === profile);
+}
 
 function normalizeReleaseNotes(releaseNotes) {
   if (typeof releaseNotes === 'string') return releaseNotes.trim();
@@ -47,10 +74,14 @@ class Updater {
     this._lastCheck = null;
     this._checkPromise = null;
     this._cancellationToken = null;
-    this._downloaded = false;
+    this._downloadedVersion = '';
+    this._downloadPromise = null;
+    this._downloadPromiseVersion = '';
+    this._downloadError = '';
     this._progressCallback = null;
 
-    const updaterModule = dependencies.updaterModule || require('electron-updater');
+    const updaterModule = dependencies.updaterModule
+      || (dependencies.autoUpdater && dependencies.CancellationToken ? null : require('electron-updater'));
     this.autoUpdater = dependencies.autoUpdater || updaterModule.autoUpdater;
     this.CancellationToken = dependencies.CancellationToken || updaterModule.CancellationToken;
 
@@ -71,9 +102,12 @@ class Updater {
   }
 
   _configureUpdater() {
+    // Profile validation happens after the manifest is read, before a download
+    // starts. Keeping electron-updater's automatic download disabled preserves
+    // that safety boundary between Lite and Full installers.
     this.autoUpdater.autoDownload = false;
-    this.autoUpdater.autoInstallOnAppQuit = true;
-    this.autoUpdater.autoRunAppAfterInstall = true;
+    this.autoUpdater.autoInstallOnAppQuit = this.config.install_on_quit !== false;
+    this.autoUpdater.autoRunAppAfterInstall = false;
     this.autoUpdater.allowPrerelease = Boolean(this.config.allow_prerelease);
     this.autoUpdater.allowDowngrade = false;
     this.autoUpdater.disableWebInstaller = true;
@@ -83,6 +117,7 @@ class Updater {
       if (!this._progressCallback) return;
       this._progressCallback({
         percent: Number(info.percent || 0),
+        current: Number(info.transferred || 0),
         transferred: Number(info.transferred || 0),
         total: Number(info.total || 0),
         bytesPerSecond: Number(info.bytesPerSecond || 0),
@@ -90,12 +125,12 @@ class Updater {
       });
     });
     this.autoUpdater.on('update-downloaded', () => {
-      this._downloaded = true;
       if (this._progressCallback) {
-        this._progressCallback({ percent: 100, transferred: 1, total: 1, bytesPerSecond: 0, file: 'ArHub update' });
+        this._progressCallback({ percent: 100, current: 1, transferred: 1, total: 1, bytesPerSecond: 0, file: 'ArHub update' });
       }
     });
     this.autoUpdater.on('error', (error) => {
+      this._downloadError = String(error && error.message ? error.message : error);
       console.error('[Updater] electron-updater error:', error);
     });
   }
@@ -171,6 +206,16 @@ class Updater {
       const onAvailable = (info) => {
         saveCheckTime();
         const normalized = this._normalizeUpdateInfo(info);
+        if (!isRuntimeProfileCompatible(info && info.files, this.config.runtime_profile)) {
+          this._lastCheck = null;
+          finish(resolve, {
+            hasUpdate: false,
+            reason: 'runtime profile mismatch',
+            version: normalized.version,
+            runtimeProfile: this.config.runtime_profile,
+          });
+          return;
+        }
         if (state.skipped_version && state.skipped_version === normalized.version) {
           this._lastCheck = null;
           finish(resolve, { hasUpdate: false, reason: 'version skipped', version: normalized.version });
@@ -202,17 +247,51 @@ class Updater {
     if (!this._lastCheck || !this._lastCheck.hasUpdate) {
       throw new Error('No update is available for download.');
     }
-    this._downloaded = false;
+    const targetVersion = String(_updateInfo && _updateInfo.version || this._lastCheck.version || '');
+    if (!targetVersion || targetVersion !== String(this._lastCheck.version || '')) {
+      throw new Error('The requested update is no longer the current available version.');
+    }
+    if (this._downloadedVersion === targetVersion) return { ok: true, files: [], alreadyDownloaded: true };
+    if (this._downloadPromise) {
+      if (this._downloadPromiseVersion === targetVersion) return this._downloadPromise;
+      throw new Error('Another update version is currently downloading.');
+    }
+
+    this._downloadError = '';
     this._progressCallback = typeof onProgress === 'function' ? onProgress : null;
     this._cancellationToken = new this.CancellationToken();
-    try {
-      const files = await this.autoUpdater.downloadUpdate(this._cancellationToken);
-      this._downloaded = true;
-      return { ok: true, files };
-    } finally {
-      this._cancellationToken = null;
-      this._progressCallback = null;
-    }
+    this._downloadPromiseVersion = targetVersion;
+    let downloadPromise;
+    downloadPromise = (async () => {
+      try {
+        const files = await this.autoUpdater.downloadUpdate(this._cancellationToken);
+        this._downloadedVersion = targetVersion;
+        this._downloadError = '';
+        return { ok: true, files };
+      } catch (error) {
+        this._downloadError = String(error && error.message ? error.message : error);
+        throw error;
+      } finally {
+        this._cancellationToken = null;
+        this._progressCallback = null;
+        if (this._downloadPromise === downloadPromise) {
+          this._downloadPromise = null;
+          this._downloadPromiseVersion = '';
+        }
+      }
+    })();
+    this._downloadPromise = downloadPromise;
+    return downloadPromise;
+  }
+
+  getDownloadStatus(version = '') {
+    const targetVersion = String(version || (this._lastCheck && this._lastCheck.version) || '');
+    return {
+      version: targetVersion,
+      current: Boolean(targetVersion && this._lastCheck && this._lastCheck.version === targetVersion),
+      downloaded: Boolean(targetVersion && this._downloadedVersion === targetVersion),
+      downloading: Boolean(targetVersion && this._downloadPromiseVersion === targetVersion && this._downloadPromise),
+    };
   }
 
   abortDownload() {
@@ -227,9 +306,18 @@ class Updater {
   }
 
   applyUpdateAndRestart() {
-    if (!this._downloaded) throw new Error('The update has not finished downloading.');
-    this.autoUpdater.quitAndInstall(false, true);
+    const status = this.getDownloadStatus();
+    if (!status.current || !status.downloaded) throw new Error('The current update has not finished downloading.');
+    this.autoUpdater.quitAndInstall(true, true);
   }
 }
 
-module.exports = { Updater, hasPublisherName, normalizeReleaseNotes };
+module.exports = {
+  Updater,
+  classifyInstaller,
+  hasPublisherName,
+  isInstallerAsset,
+  isRuntimeProfileCompatible,
+  normalizeRuntimeProfile,
+  normalizeReleaseNotes,
+};

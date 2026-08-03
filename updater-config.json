@@ -2,5 +2,7 @@
   "enabled": true,
   "check_interval_hours": 6,
   "allow_prerelease": false,
+  "auto_download": true,
+  "install_on_quit": true,
   "require_publisher_verification": false
 }
