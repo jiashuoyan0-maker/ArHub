@@ -41,8 +41,11 @@ try {
 
     if (-not $isAppOnly) {
         if ($RuntimeProfile -eq 'lite') {
-            $liteValidation = @('-RuntimeDir', $runtime, '-AllowOptionalComponents')
-            if (-not $AllowRuntimeDrift) { $liteValidation += '-EnforceLock' }
+            $liteValidation = @{
+                RuntimeDir = $runtime
+                AllowOptionalComponents = $true
+            }
+            if (-not $AllowRuntimeDrift) { $liteValidation.EnforceLock = $true }
             & (Join-Path $PSScriptRoot 'assert-lite-runtime.ps1') @liteValidation
         } elseif ($AllowRuntimeDrift) {
             & (Join-Path $PSScriptRoot 'assert-runtime.ps1') -RuntimeDir $runtime
@@ -165,8 +168,10 @@ try {
         $utf8 = New-Object System.Text.UTF8Encoding($false)
         [System.IO.File]::WriteAllText((Join-Path $projectRoot 'release\sbom-node.cdx.json'), $nodeSbom.Trim() + "`n", $utf8)
     } elseif ($RuntimeProfile -eq 'lite') {
-        $packagedLiteValidation = @('-RuntimeDir', $packagedRuntime)
-        if (-not $AllowRuntimeDrift) { $packagedLiteValidation += '-EnforceLock' }
+        $packagedLiteValidation = @{
+            RuntimeDir = $packagedRuntime
+        }
+        if (-not $AllowRuntimeDrift) { $packagedLiteValidation.EnforceLock = $true }
         & (Join-Path $PSScriptRoot 'assert-lite-runtime.ps1') @packagedLiteValidation
         & (Join-Path $PSScriptRoot 'generate-sbom.ps1') -RuntimeDir $packagedRuntime
     } else {
