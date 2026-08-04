@@ -3,7 +3,7 @@
     "runtimeVersion":  "2026.08.04.1",
     "architecture":  "x64",
     "manifestSha256":  "22619f964df133676c4232c1ee31c211c46ff9aa69ff49d2860aaae725c938a9",
-    "pythonRequirementsSha256":  "c400d9eea1a4b6fc9081f5f3640bb367b79858ab5379e07d3d9701706daa3538",
+    "pythonRequirementsSha256":  "7b025469bd33fe289ec351f44dc997efb2dea006b793f02d8600d3b47284c3fc",
     "components":  {
                        "python":  {
                                       "files":  62334,

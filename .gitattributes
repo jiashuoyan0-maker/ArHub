@@ -17,3 +17,6 @@
 *.woff2 binary
 
 dist/assets/arhub-icons.js text eol=lf
+packaging/runtime-manifest.json text eol=lf
+packaging/runtime-lock.json text eol=lf
+packaging/python-requirements.lock.txt text eol=lf
