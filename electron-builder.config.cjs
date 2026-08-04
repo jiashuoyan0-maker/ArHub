@@ -12,7 +12,7 @@ const requireSigning = process.env.ARHUB_REQUIRE_SIGNING === '1';
 const publisherName = String(process.env.ARHUB_PUBLISHER_NAME || '').trim();
 const signingProvider = String(process.env.ARHUB_SIGNING_PROVIDER || 'pfx').toLowerCase();
 const artifactSuffix = process.env.ARHUB_ARTIFACT_SUFFIX || '';
-const runtimeProfile = String(process.env.ARHUB_RUNTIME_PROFILE || 'full').toLowerCase();
+const runtimeProfile = String(process.env.ARHUB_RUNTIME_PROFILE || 'lite').toLowerCase();
 if (!['full', 'lite', 'app-only'].includes(runtimeProfile)) {
   throw new Error(`Unsupported ARHUB_RUNTIME_PROFILE: ${runtimeProfile}`);
 }

@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "runtimeVersion": "2026.07.30.3",
+  "runtimeVersion": "2026.08.04.1",
   "architecture": "x64",
   "minimumTotalBytes": 6400000000,
   "forbiddenPaths": [

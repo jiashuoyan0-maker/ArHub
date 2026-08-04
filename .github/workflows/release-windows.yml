@@ -1,4 +1,4 @@
-name: Windows Release
+name: Windows Lite Release
 
 on:
   push:
@@ -141,50 +141,24 @@ jobs:
             if ([int64]$asset[0].size -ne $file.Length) { throw "Release asset size mismatch: $($file.Name)" }
           }
 
-      - name: Detect reusable local runtime
+      - name: Resolve verified Lite runtime
         id: runtime
         shell: powershell
         run: |
-          $reuse = $false
           $runtime = [string]$env:ARHUB_RUNTIME_DIR
-          if (-not [string]::IsNullOrWhiteSpace($runtime) -and (Test-Path -LiteralPath $runtime -PathType Container)) {
-            powershell -NoProfile -ExecutionPolicy Bypass -File scripts/assert-runtime.ps1 -RuntimeDir $runtime -EnforceLock
-            $reuse = $LASTEXITCODE -eq 0
+          if ([string]::IsNullOrWhiteSpace($runtime) -or -not (Test-Path -LiteralPath $runtime -PathType Container)) {
+            throw 'Repository variable ARHUB_RUNTIME_DIR must point to a prepared Lite-compatible runtime.'
           }
-          if ($reuse) {
-            $runtime = (Resolve-Path -LiteralPath $runtime).Path
-            Write-Host "Reusing verified runtime: $runtime"
-          } else {
-            $runtime = [System.IO.Path]::GetFullPath((Join-Path $PWD '.runtime\full'))
-          }
-          "reuse=$($reuse.ToString().ToLowerInvariant())" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
+          powershell -NoProfile -ExecutionPolicy Bypass -File scripts/assert-lite-runtime.ps1 -RuntimeDir $runtime -AllowOptionalComponents -EnforceLock
+          if ($LASTEXITCODE -ne 0) { throw 'Lite runtime validation failed.' }
+          $runtime = (Resolve-Path -LiteralPath $runtime).Path
           "ARHUB_EFFECTIVE_RUNTIME_DIR=$runtime" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
-
-      - name: Download locked runtime bundle
-        if: steps.runtime.outputs.reuse != 'true'
-        shell: powershell
-        run: |
-          $manifest = Get-Content packaging/runtime-manifest.json -Encoding utf8 | ConvertFrom-Json
-          New-Item -ItemType Directory -Path .runtime/bundle -Force | Out-Null
-          gh release download "runtime-v$($manifest.runtimeVersion)" --repo "${{ github.repository }}" --dir .runtime/bundle
-
-      - name: Verify locked runtime download
-        if: steps.runtime.outputs.reuse != 'true'
-        shell: powershell
-        run: powershell -NoProfile -ExecutionPolicy Bypass -File scripts/verify-runtime-bundle.ps1 -BundleDir .runtime/bundle
-
-      - name: Restore and verify runtime
-        if: steps.runtime.outputs.reuse != 'true'
-        shell: powershell
-        run: |
-          powershell -NoProfile -ExecutionPolicy Bypass -File scripts/restore-runtime.ps1 -BundleDir .runtime/bundle -DestinationDir .runtime/full
-          Remove-Item -LiteralPath .runtime/bundle -Recurse -Force
 
       - name: Build and verify unsigned installer
         if: steps.existing.outputs.reuse != 'true'
         shell: powershell
         run: |
-          powershell -NoProfile -ExecutionPolicy Bypass -File scripts/build-windows.ps1 -RuntimeDir $env:ARHUB_EFFECTIVE_RUNTIME_DIR -UnsignedRelease -SkipTests
+          powershell -NoProfile -ExecutionPolicy Bypass -File scripts/build-windows.ps1 -RuntimeDir $env:ARHUB_EFFECTIVE_RUNTIME_DIR -RuntimeProfile lite -UnsignedRelease -SkipTests
 
       - name: Prepare metadata for reused installer
         if: steps.existing.outputs.reuse == 'true'
@@ -221,7 +195,6 @@ jobs:
       - name: Reclaim build space and smoke-test installer
         shell: powershell
         run: |
-          Remove-Item -LiteralPath .runtime/full -Recurse -Force -ErrorAction SilentlyContinue
           Remove-Item -LiteralPath release/win-unpacked -Recurse -Force -ErrorAction SilentlyContinue
           $installer = @(Get-ChildItem release -File -Filter 'ArHub-Setup-*.exe')
           if ($installer.Count -ne 1) { throw "Expected one installer, found $($installer.Count)." }

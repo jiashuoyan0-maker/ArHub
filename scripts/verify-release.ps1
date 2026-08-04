@@ -3,7 +3,7 @@ param(
     [string]$ReleaseDir,
     [string]$PublisherName = $env:ARHUB_PUBLISHER_NAME,
     [ValidateSet('full', 'lite')]
-    [string]$RuntimeProfile = $(if ($env:ARHUB_RUNTIME_PROFILE) { $env:ARHUB_RUNTIME_PROFILE } else { 'full' }),
+    [string]$RuntimeProfile = $(if ($env:ARHUB_RUNTIME_PROFILE) { $env:ARHUB_RUNTIME_PROFILE } else { 'lite' }),
     [switch]$AllowUnsigned,
     [switch]$RequireUnsigned
 )

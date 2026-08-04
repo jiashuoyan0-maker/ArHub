@@ -1,13 +1,13 @@
 {
     "schemaVersion":  1,
-    "runtimeVersion":  "2026.07.30.3",
+    "runtimeVersion":  "2026.08.04.1",
     "architecture":  "x64",
-    "manifestSha256":  "610827b797a48ce0e26a537101ef3b53d0e03e17a38b8dd5782d9b38d459aa6a",
-    "pythonRequirementsSha256":  "802c196f3c503e032798bda915d41727d326a0de9b4817616695238b0481d9d7",
+    "manifestSha256":  "22619f964df133676c4232c1ee31c211c46ff9aa69ff49d2860aaae725c938a9",
+    "pythonRequirementsSha256":  "c400d9eea1a4b6fc9081f5f3640bb367b79858ab5379e07d3d9701706daa3538",
     "components":  {
                        "python":  {
-                                      "files":  62330,
-                                      "bytes":  4352946649
+                                      "files":  62334,
+                                      "bytes":  4352978376
                                   },
                        "node":  {
                                     "files":  2186,

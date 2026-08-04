@@ -42,10 +42,7 @@ jobs:
       - name: Audit Python dependencies
         run: |
           python -m pip_audit -r backend/requirements.txt
-          # App-only candidates reuse the external runtime and cannot patch it.
-          # Remove this exception when that runtime moves to cryptography >= 50.0.0.
-          # Stable/runtime release gates remain strict and do not carry this exception.
-          python -m pip_audit -r packaging/python-requirements.lock.txt --no-deps --disable-pip --ignore-vuln CVE-2026-69247
+          python -m pip_audit -r packaging/python-requirements.lock.txt --no-deps --disable-pip
 
       - name: Check JavaScript syntax
         run: npm run check:js

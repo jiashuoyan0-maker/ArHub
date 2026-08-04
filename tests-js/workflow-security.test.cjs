@@ -51,6 +51,7 @@ test('official Windows releases are explicitly unsigned and retain integrity art
     fs.readFileSync(path.join(__dirname, '..', 'updater-config.json'), 'utf8'),
   );
   assert.match(releaseWorkflow, /-UnsignedRelease\b/);
+  assert.match(releaseWorkflow, /-RuntimeProfile lite\b/);
   assert.match(releaseWorkflow, /-RequireUnsigned\b/);
   assert.doesNotMatch(releaseWorkflow, /WINDOWS_CERTIFICATE|AZURE_TRUSTED_SIGNING|azure\/login/);
   assert.doesNotMatch(releaseWorkflow, /^\s*environment:\s*windows-release\s*$/m);
@@ -139,13 +140,13 @@ test('automatic Lite publishing only trusts successful main pushes from this rep
   assert.doesNotMatch(workflow, /scripts\/assert-runtime\.ps1/);
 });
 
-test('temporary runtime CVE exception is limited to candidate quality checks', () => {
+test('resolved runtime CVE is not exempted from any release gate', () => {
   const quality = fs.readFileSync(path.join(workflowDir, 'quality.yml'), 'utf8');
   const release = fs.readFileSync(path.join(workflowDir, 'release-windows.yml'), 'utf8');
   const maintenance = fs.readFileSync(path.join(workflowDir, 'maintenance.yml'), 'utf8');
   const exception = /--ignore-vuln CVE-2026-69247/;
 
-  assert.match(quality, exception);
+  assert.doesNotMatch(quality, exception);
   assert.doesNotMatch(release, exception);
   assert.doesNotMatch(maintenance, exception);
 });

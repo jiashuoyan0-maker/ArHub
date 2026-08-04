@@ -2,7 +2,7 @@
 param(
     [string]$RuntimeDir,
     [ValidateSet('full', 'lite', 'app-only')]
-    [string]$RuntimeProfile = $(if ($env:ARHUB_RUNTIME_PROFILE) { $env:ARHUB_RUNTIME_PROFILE } else { 'full' }),
+    [string]$RuntimeProfile = $(if ($env:ARHUB_RUNTIME_PROFILE) { $env:ARHUB_RUNTIME_PROFILE } else { 'lite' }),
     [ValidateSet('pfx', 'azure')]
     [string]$SigningProvider = $(if ($env:ARHUB_SIGNING_PROVIDER) { $env:ARHUB_SIGNING_PROVIDER } else { 'pfx' }),
     [switch]$AllowUnsigned,
@@ -40,7 +40,11 @@ try {
     if ($LASTEXITCODE -ne 0) { throw 'Capability verification failed.' }
 
     if (-not $isAppOnly) {
-        if ($AllowRuntimeDrift) {
+        if ($RuntimeProfile -eq 'lite') {
+            $liteValidation = @('-RuntimeDir', $runtime, '-AllowOptionalComponents')
+            if (-not $AllowRuntimeDrift) { $liteValidation += '-EnforceLock' }
+            & (Join-Path $PSScriptRoot 'assert-lite-runtime.ps1') @liteValidation
+        } elseif ($AllowRuntimeDrift) {
             & (Join-Path $PSScriptRoot 'assert-runtime.ps1') -RuntimeDir $runtime
         } else {
             & (Join-Path $PSScriptRoot 'assert-runtime.ps1') -RuntimeDir $runtime -EnforceLock
@@ -161,7 +165,9 @@ try {
         $utf8 = New-Object System.Text.UTF8Encoding($false)
         [System.IO.File]::WriteAllText((Join-Path $projectRoot 'release\sbom-node.cdx.json'), $nodeSbom.Trim() + "`n", $utf8)
     } elseif ($RuntimeProfile -eq 'lite') {
-        & (Join-Path $PSScriptRoot 'assert-lite-runtime.ps1') -RuntimeDir $packagedRuntime
+        $packagedLiteValidation = @('-RuntimeDir', $packagedRuntime)
+        if (-not $AllowRuntimeDrift) { $packagedLiteValidation += '-EnforceLock' }
+        & (Join-Path $PSScriptRoot 'assert-lite-runtime.ps1') @packagedLiteValidation
         & (Join-Path $PSScriptRoot 'generate-sbom.ps1') -RuntimeDir $packagedRuntime
     } else {
         & (Join-Path $PSScriptRoot 'assert-runtime.ps1') -RuntimeDir $packagedRuntime -EnforceLock -SkipPythonDependencyCheck
