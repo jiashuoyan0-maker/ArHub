@@ -40,10 +40,13 @@ const liteExcludedPythonPackages = [
   'modelscope*',
   'rdkit*',
   'pyogrio*',
-  // Dependents of the excluded packages above; excluding them keeps pip check valid in the packaged Lite runtime.
+  // Dependents whose mandatory dependencies are stripped above; excluding them keeps pip check valid in the packaged Lite runtime.
   'geopandas*',
   'miceforest*',
-  'shap*',
+  'shap',
+  'shap-*',
+  'esda*',
+  'libpysal*',
 ];
 const runtimeFilter = ['**/*'];
 if (runtimeProfile === 'lite') {
