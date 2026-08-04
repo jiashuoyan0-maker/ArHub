@@ -48,6 +48,9 @@ test('Codex-inspired editor layer loads last and keeps contextual panels accessi
   assert.match(settingsScript, /\$\{agent\}_reasoning_effort/);
   assert.match(settingsScript, /\$\{agent\}_claude_model/);
   assert.match(settingsScript, /runtimeField\(\s*"默认 Claude 强度",\s*claudeEffort,\s*"claude_effort"/s);
+  assert.match(settingsScript, /let runtimeSettingsRevision = 0/);
+  assert.match(settingsScript, /card\.dataset\.runtimeDirty/);
+  assert.match(settingsScript, /if \(created\)/);
   assert.match(shellCss, /\.mw-shell-community-link/);
 });
 
@@ -65,6 +68,12 @@ test('Agent composer keeps the prompt dominant and exposes runtime controls', ()
   assert.doesNotMatch(script, /executor_runtime["']/);
   assert.match(script, /\$\{agentName\}_reasoning_effort/);
   assert.match(script, /loadClaudeCapability/);
+  assert.match(script, /const nextRuntime = runtimeSelect\.value/);
+  assert.match(script, /setOptimisticSetting\(runtimeKey, nextRuntime\)/);
+  assert.match(script, /saveSettingsPatch\(\{ \[runtimeKey\]: nextRuntime \}\)/);
+  assert.match(script, /const nextEffort = effortSelect\.value/);
+  assert.match(script, /setOptimisticSetting\(key, nextEffort\)/);
+  assert.match(script, /saveSettingsPatch\(\{ \[key\]: nextEffort \}\)/);
   assert.match(script, /createLucideButton\("PanelLeft"/);
   assert.match(script, /createLucideButton\("Puzzle"/);
   assert.match(script, /extensionSection\("视图"/);

@@ -368,6 +368,19 @@ async function saveSettingsPatch(patch) {
   scheduleEnhance();
 }
 
+function setOptimisticSetting(key, value) {
+  state.settings = { ...(state.settings || {}), [key]: value };
+  scheduleEnhance();
+}
+
+function restoreSetting(key, previous) {
+  const next = { ...(state.settings || {}) };
+  if (previous == null) delete next[key];
+  else next[key] = previous;
+  state.settings = next;
+  scheduleEnhance();
+}
+
 function findEditorParts() {
   const input = document.querySelector(
     'textarea[placeholder*="Agent"], input[placeholder*="Agent"]',
@@ -1400,6 +1413,7 @@ function enhanceComposer(parts) {
 
   let runtimeSelect = composerModel.querySelector(".mw-runtime-select");
   if (!runtimeSelect) {
+    let runtimeChangeSerial = 0;
     runtimeSelect = document.createElement("select");
     runtimeSelect.className = "mw-runtime-select";
     runtimeSelect.setAttribute("aria-label", "Agent 运行时");
@@ -1415,15 +1429,23 @@ function enhanceComposer(parts) {
     runtimeSelect.addEventListener("change", async () => {
       const agentName = activeAgentName(parts);
       const runtimeKey = ROLE_RUNTIME_KEYS[agentName];
+      const nextRuntime = runtimeSelect.value;
       const previous = selectedRuntime(agentName);
+      const requestId = ++runtimeChangeSerial;
+      setOptimisticSetting(runtimeKey, nextRuntime);
       try {
-        if (runtimeSelect.value === "local_claude") {
+        if (nextRuntime === "local_claude") {
           const payload = await loadClaudeCapability(true);
           if (!payload?.compatible) throw new Error("未检测到可用的本机 Claude Code");
         }
-        await saveSettingsPatch({ [runtimeKey]: runtimeSelect.value });
+        if (requestId !== runtimeChangeSerial) return;
+        await saveSettingsPatch({ [runtimeKey]: nextRuntime });
       } catch (error) {
-        runtimeSelect.value = previous;
+        if (requestId !== runtimeChangeSerial) return;
+        if (state.settings?.[runtimeKey] === nextRuntime) {
+          restoreSetting(runtimeKey, previous);
+          runtimeSelect.value = previous;
+        }
         runtimeSelect.title = String(error?.message || error);
       }
     });
@@ -1432,6 +1454,7 @@ function enhanceComposer(parts) {
 
   let effortSelect = composerModel.querySelector(".mw-effort-select");
   if (!effortSelect) {
+    let effortChangeSerial = 0;
     effortSelect = document.createElement("select");
     effortSelect.className = "mw-effort-select";
     effortSelect.setAttribute("aria-label", "思考强度");
@@ -1453,12 +1476,19 @@ function enhanceComposer(parts) {
       const agentName = activeAgentName(parts);
       const runtime = selectedRuntime(agentName);
       const key = `${agentName}_reasoning_effort`;
+      const nextEffort = effortSelect.value;
       const fallback = runtime === "local_claude" ? "high" : "default";
       const previous = state.settings?.[key] || fallback;
+      const requestId = ++effortChangeSerial;
+      setOptimisticSetting(key, nextEffort);
       try {
-        await saveSettingsPatch({ [key]: effortSelect.value });
+        await saveSettingsPatch({ [key]: nextEffort });
       } catch (error) {
-        effortSelect.value = previous;
+        if (requestId !== effortChangeSerial) return;
+        if (state.settings?.[key] === nextEffort) {
+          restoreSetting(key, previous);
+          effortSelect.value = previous;
+        }
         effortSelect.title = String(error?.message || error);
       }
     });

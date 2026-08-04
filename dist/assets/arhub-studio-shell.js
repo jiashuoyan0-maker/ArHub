@@ -35,6 +35,7 @@ const KICKERS = Object.freeze({
 
 let scheduled = false;
 let runtimeSettingsPromise = null;
+let runtimeSettingsRevision = 0;
 
 function currentView() {
   const path = window.location.pathname;
@@ -354,7 +355,9 @@ function installRuntimeSettings(main) {
   const host = main.querySelector(".space-y-6");
   if (!(host instanceof HTMLElement)) return;
   let card = host.querySelector("#arhub-runtime-settings");
+  let created = false;
   if (!card) {
+    created = true;
     card = document.createElement("section");
     card.id = "arhub-runtime-settings";
     card.className = "card arhub-studio-settings-card arhub-runtime-settings";
@@ -426,6 +429,15 @@ function installRuntimeSettings(main) {
     card.append(heading, grid, roles, actions);
     host.prepend(card);
 
+    const markRuntimeDirty = (event) => {
+      const target = event.target;
+      if (target instanceof HTMLElement && target.matches("[data-runtime-setting]")) {
+        card.dataset.runtimeDirty = "true";
+      }
+    };
+    card.addEventListener("input", markRuntimeDirty);
+    card.addEventListener("change", markRuntimeDirty);
+
     runtime.addEventListener("change", () =>
       syncRuntimeCard(card, runtimeCardValues(card)),
     );
@@ -466,7 +478,9 @@ function installRuntimeSettings(main) {
         if (!response.ok) throw new Error(await response.text());
         status.textContent = "已保存";
         status.dataset.state = "ready";
+        runtimeSettingsRevision += 1;
         runtimeSettingsPromise = Promise.resolve(values);
+        delete card.dataset.runtimeDirty;
       } catch (error) {
         status.textContent = String(error?.message || error);
         status.dataset.state = "error";
@@ -482,7 +496,19 @@ function installRuntimeSettings(main) {
       .then((payload) => payload?.settings || {})
       .catch(() => ({}));
   }
-  runtimeSettingsPromise.then((settings) => syncRuntimeCard(card, settings));
+  if (created) {
+    const revision = runtimeSettingsRevision;
+    runtimeSettingsPromise.then((settings) => {
+      if (
+        revision !== runtimeSettingsRevision ||
+        !card.isConnected ||
+        card.dataset.runtimeDirty === "true"
+      ) {
+        return;
+      }
+      syncRuntimeCard(card, settings);
+    });
+  }
 }
 
 function decorateSettings(main) {
