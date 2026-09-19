@@ -7,7 +7,7 @@ alembic==1.18.4
 alive-progress==3.3.0
 annotated-doc==0.0.4
 annotated-types==0.7.0
-anyio==4.13.0
+anyio==4.14.2
 arch==8.0.0
 astunparse==1.6.3
 autograd==1.8.0
