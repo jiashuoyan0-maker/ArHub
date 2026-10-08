@@ -149,7 +149,7 @@ pymoo==0.6.1.6
 PyMuPDF==1.27.2.3
 pyogrio==0.12.1
 pyparsing==3.3.2
-pypdf==6.14.2
+pypdf==6.19.0
 pypdfium2==5.7.1
 pyphen==0.17.2
 pyproj==3.7.2
