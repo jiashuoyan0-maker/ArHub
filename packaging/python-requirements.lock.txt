@@ -124,7 +124,7 @@ pandas==2.3.3
 pandas-flavor==0.8.1
 patsy==1.0.2
 peewee==4.0.4
-pillow==12.3.0
+pillow==13.0.0
 pingouin==0.6.1
 pip==26.2
 platformdirs==4.9.4
