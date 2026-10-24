@@ -42,7 +42,7 @@ dill==0.4.1
 esda==2.9.0
 et_xmlfile==2.0.0
 fastapi==0.141.1
-filelock==3.29.0
+filelock==4.2.1
 flatbuffers==25.12.19
 fonttools==4.62.1
 formulaic==1.2.1
