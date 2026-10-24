@@ -180,7 +180,7 @@ scipy==1.17.1
 scs==3.2.11
 seaborn==0.13.2
 semopy==2.3.11
-setuptools==83.0.0
+setuptools==84.1.0
 shap==0.51.0
 shapely==2.1.2
 shellingham==1.5.4
