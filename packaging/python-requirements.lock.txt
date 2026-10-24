@@ -14,7 +14,7 @@ autograd==1.8.0
 autograd-gamma==0.5.0
 bce-python-sdk==0.9.71
 beautifulsoup4==4.14.3
-brotli==1.2.0
+brotli==1.2.1
 catboost==1.2.10
 certifi==2026.2.25
 cffi==2.0.0
